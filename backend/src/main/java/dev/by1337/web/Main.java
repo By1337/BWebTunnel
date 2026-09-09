@@ -14,7 +14,9 @@ public class Main {
         SLF4JBridgeHandler.removeHandlersForRootLogger();
         SLF4JBridgeHandler.install();
 
-        ConnectionListener connectionListener = new ConnectionListener();
+        ClientList clientList = new ClientList();
+
+        ConnectionListener connectionListener = new ConnectionListener(clientList);
         connectionListener.startServerListener(4443);// //"ws://localhost:4443/api/ws"
     }
 

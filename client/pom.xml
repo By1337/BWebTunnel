@@ -9,9 +9,9 @@
     <artifactId>client</artifactId>
 
     <properties>
-        <java.version>16</java.version>
-        <java.source>16</java.source>
-        <java.target>16</java.target>
+        <java.version>21</java.version>
+        <java.source>21</java.source>
+        <java.target>21</java.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 

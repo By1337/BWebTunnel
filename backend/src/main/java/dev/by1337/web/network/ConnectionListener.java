@@ -2,6 +2,7 @@ package dev.by1337.web.network;
 
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import dev.by1337.web.ClientList;
 import dev.by1337.web.util.LazyLoad;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
@@ -17,6 +18,7 @@ import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.List;
 
@@ -32,7 +34,11 @@ public class ConnectionListener {
                     .setNameFormat("Netty Server IO #%d")
                     .setUncaughtExceptionHandler((t, e) -> log.error("Caught previously unhandled exception :", e)).setDaemon(true).build())
     );
+    private final ClientList clientList;
 
+    public ConnectionListener(ClientList clientList) {
+        this.clientList = clientList;
+    }
 
 
     public int startServerListener(int port) {
@@ -61,7 +67,7 @@ public class ConnectionListener {
                                     .addLast("http", new HttpServerCodec())
                                     .addLast("aggregator", new HttpObjectAggregator(1024 * 1024))
                                     .addLast("ws", new WebSocketServerProtocolHandler("/api/ws"))
-                                    .addLast("handler", new ApiHandler());
+                                    .addLast("handler", new ApiHandler(clientList));
                             ;
                         }
                     })
@@ -70,8 +76,11 @@ public class ConnectionListener {
                     .bind()
                     .syncUninterruptibly();
             this.channels.add(v);
+            if (v.channel().localAddress() instanceof InetSocketAddress isa){
+                return isa.getPort();
+            }
+            return port;
         }
-        return port;
     }
 
     public void stop() {

@@ -109,6 +109,14 @@
 
     <dependencies>
         <dependency>
+            <groupId>dev.by1337.web</groupId>
+            <artifactId>client</artifactId>
+            <version>${project.version}</version>
+            <!--   ради WebProtocol шейд   -->
+            <scope>compile</scope>
+        </dependency>
+
+        <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-all</artifactId>
             <version>4.1.115.Final</version>
@@ -177,15 +185,16 @@
         </dependency>
 
         <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.13.1</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <version>5.14.0</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>2.0.17</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

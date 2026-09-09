@@ -9,6 +9,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -73,13 +74,14 @@ public class WebEndpoint {
     }
 
     public interface Connection {
-        String getToken();
+        String getUrlPath();
     }
 
     private class WebSocketConnection implements Closeable, WebSocket.Listener, Connection {
         private WebSocket socket;
         private volatile State state = State.CONNECTING;
         private final CompletableFuture<Connection> authFuture = new CompletableFuture<>();
+        private String urlPath;
 
         @Override
         public void onOpen(WebSocket webSocket) {
@@ -87,21 +89,51 @@ public class WebEndpoint {
                 sendClosed(webSocket);
                 return;
             }
-            state = State.AUTHENTICATING;
             socket = webSocket;
+            setState(State.AUTHENTICATING);
             webSocket.request(1);
+        }
+
+        private void setState(State next) {
+            if (next == State.AUTHENTICATING) {
+                if (state != State.CONNECTING)
+                    throw new IllegalStateException("not allowed state " + state + " next " + next);
+                state = State.AUTHENTICATING;
+
+                var payload = staticContent.getBytes(StandardCharsets.UTF_8);
+                ByteBuffer buffer = ByteBuffer.allocate(1 + payload.length);
+                buffer.put(WebProtocol.HELLO);
+                buffer.put(payload);
+                buffer.flip();
+                socket.sendBinary(buffer, true);
+            }
+        }
+
+        @Override
+        public CompletionStage<?> onBinary(WebSocket webSocket, ByteBuffer buf, boolean last) {
+            if (!last) throw new IllegalStateException("not allowed method BINARY fragmented");
+            if (buf.remaining() < 1) throw new IllegalStateException("Bad payload size!");
+            byte type = buf.get();
+            if (type == WebProtocol.AUTH_STATUS) {
+                if (state != State.AUTHENTICATING)
+                    throw new IllegalStateException("not allowed state " + state + " bot got AUTH_STATUS packet");
+                byte status = buf.get();
+                if (status != 1) throw new IllegalStateException("Authentication error " + status);
+                int size = buf.remaining();
+                if (size <= 0 || size >= 256) throw new IllegalStateException("Bad payload size " + size);
+                byte[] url = new byte[size];
+                buf.get(url);
+                urlPath = new String(url);
+                setState(State.READY);
+                authFuture.complete(this);
+            }
+            webSocket.request(1);
+            return null;
         }
 
         @Override
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-            webSocket.request(1);
-            return null;
-        }
-
-        @Override
-        public CompletionStage<?> onBinary(WebSocket webSocket, ByteBuffer data, boolean last) {
-            webSocket.request(1);
-            return null;
+            throw new IllegalStateException("not allowed method TEXT");
         }
 
         @Override
@@ -134,8 +166,8 @@ public class WebEndpoint {
         }
 
         @Override
-        public String getToken() {
-            return "";
+        public String getUrlPath() {
+            return urlPath;
         }
 
         public enum State {
