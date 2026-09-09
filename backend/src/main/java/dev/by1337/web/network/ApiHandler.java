@@ -5,6 +5,8 @@ import dev.by1337.web.client.WebProtocol;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.websocketx.BinaryWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketFrame;
 import org.slf4j.Logger;
@@ -24,7 +26,7 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof FullHttpRequest request) {
-            //  handleHttp(ctx, request);
+            onHttpRequest(ctx, request);
             return;
         }
 
@@ -59,6 +61,38 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
             }
         }
     }
+
+
+    private void onHttpRequest(ChannelHandlerContext ctx, FullHttpRequest request) {
+        HttpResponser responser = new HttpResponser(ctx);
+        if (request.method() != HttpMethod.GET) {
+            responser.send(HttpResponseStatus.METHOD_NOT_ALLOWED);
+            return;
+        }
+
+        // /api/token/method/
+        // /api/token/method?key=value
+        String uri = request.uri();
+        String[] args = uri.split("/");
+        if (args.length < 4 || !args[1].equals("api")) {
+            responser.send(HttpResponseStatus.BAD_REQUEST);
+            return;
+        }
+        String token = args[2];
+        String method = args[3];
+        var client = clientList.getClient(token);
+        if (client == null) {
+            //todo rate limit
+            if (method.equals("health")) {
+                responser.sendJson("{\"ok\": \"false\"}");
+            } else {
+                responser.send(HttpResponseStatus.NOT_FOUND);
+            }
+        } else {
+            client.request(responser, method);
+        }
+    }
+
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {

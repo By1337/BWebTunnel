@@ -2,6 +2,7 @@ package dev.by1337.web;
 
 import dev.by1337.web.network.WebSocketHandler;
 import dev.by1337.web.util.Base62Converter;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,6 +24,9 @@ public class ClientList {
 
     public void removeConnection(WebSocketHandler client) {
         clientList.remove(client.token(), client);
+    }
+    public @Nullable WebSocketHandler getClient(String token){
+        return clientList.get(token);
     }
 
 }

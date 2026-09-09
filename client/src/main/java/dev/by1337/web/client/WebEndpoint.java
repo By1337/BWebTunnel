@@ -13,8 +13,15 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 public class WebEndpoint {
+    private static final Executor WS_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        var t = new Thread(r);
+        t.setName("WebEndpoint");
+        return t;
+    });
     private static final Logger log = LoggerFactory.getLogger("WebEndpoint");
     private final boolean debug;
     private final String url;
@@ -26,7 +33,7 @@ public class WebEndpoint {
         this.debug = debug;
         this.url = url;
         this.staticContent = staticContent;
-        httpClient = HttpClient.newHttpClient();
+        httpClient = HttpClient.newBuilder().executor(WS_EXECUTOR).build();
     }
 
     public CompletableFuture<@Nullable Connection> connect() {
@@ -82,6 +89,7 @@ public class WebEndpoint {
         private volatile State state = State.CONNECTING;
         private final CompletableFuture<Connection> authFuture = new CompletableFuture<>();
         private String urlPath;
+        private final BufCompressor compressor = new BufCompressor(6);
 
         @Override
         public void onOpen(WebSocket webSocket) {
@@ -106,6 +114,8 @@ public class WebEndpoint {
                 buffer.put(payload);
                 buffer.flip();
                 socket.sendBinary(buffer, true);
+            } else {
+                state = next;
             }
         }
 
@@ -126,6 +136,31 @@ public class WebEndpoint {
                 urlPath = new String(url);
                 setState(State.READY);
                 authFuture.complete(this);
+            } else if (type == WebProtocol.GET) {
+                if (state != State.READY)
+                    throw new IllegalStateException("not allowed state " + state + " bot got GET packet");
+                int uid = buf.getInt();
+                int size = buf.remaining();
+                if (size <= 0 || size >= 256) throw new IllegalStateException("Bad payload size " + size);
+                byte[] methodBytes = new byte[size];
+                buf.get(methodBytes);
+                var method = new String(methodBytes);
+//                System.out.println("GET " + method);
+
+                String response = "{test json ok?}";
+                byte[] result = response.getBytes(StandardCharsets.UTF_8);
+                ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 4 + result.length);
+                buffer.put(WebProtocol.RESPONSE);
+                buffer.putInt(uid);
+                if (result.length < 1024) {
+                    buffer.putInt(0);
+                    buffer.put(result);
+                } else {
+                    buffer.putInt(result.length);
+                    compressor.deflate(result, buffer);
+                }
+                buffer.flip();
+                webSocket.sendBinary(buffer, true);
             }
             webSocket.request(1);
             return null;

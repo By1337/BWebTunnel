@@ -1,5 +1,6 @@
 package dev.by1337.web;
 
+import com.velocitypowered.natives.util.Natives;
 import dev.by1337.web.network.ConnectionListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
