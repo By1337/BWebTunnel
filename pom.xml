@@ -8,5 +8,6 @@
   <name>BWebTunnel</name>
   <modules>
     <module>backend</module>
+    <module>client</module>
   </modules>
 </project>
