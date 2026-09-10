@@ -22,14 +22,21 @@ public class WebEndpoint {
         t.setName("WebEndpoint");
         return t;
     });
+    private static final int PROTOCOL_VERSION = 1;
     private static final Logger log = LoggerFactory.getLogger("WebEndpoint");
     private final boolean debug;
     private final String url;
     private final String staticContent;
     private final HttpClient httpClient;
     private WebSocketConnection webSocket;
+    private final RequestRouter router;
 
-    public WebEndpoint(boolean debug, String url, String staticContent) {
+    public WebEndpoint(RequestRouter router, String url, String staticContent) {
+        this(router, false, url, staticContent);
+    }
+
+    public WebEndpoint(RequestRouter router, boolean debug, String url, String staticContent) {
+        this.router = router;
         this.debug = debug;
         this.url = url;
         this.staticContent = staticContent;
@@ -81,7 +88,7 @@ public class WebEndpoint {
     }
 
     public interface Connection {
-        String getUrlPath();
+        String getToken();
     }
 
     private class WebSocketConnection implements Closeable, WebSocket.Listener, Connection {
@@ -109,8 +116,9 @@ public class WebEndpoint {
                 state = State.AUTHENTICATING;
 
                 var payload = staticContent.getBytes(StandardCharsets.UTF_8);
-                ByteBuffer buffer = ByteBuffer.allocate(1 + payload.length);
+                ByteBuffer buffer = ByteBuffer.allocate(4 + 1 + payload.length);
                 buffer.put(WebProtocol.HELLO);
+                buffer.putInt(PROTOCOL_VERSION);
                 buffer.put(payload);
                 buffer.flip();
                 socket.sendBinary(buffer, true);
@@ -142,17 +150,21 @@ public class WebEndpoint {
                 int uid = buf.getInt();
                 int size = buf.remaining();
                 if (size <= 0 || size >= 256) throw new IllegalStateException("Bad payload size " + size);
-                byte[] methodBytes = new byte[size];
-                buf.get(methodBytes);
-                var method = new String(methodBytes);
-//                System.out.println("GET " + method);
+                byte[] requestBytes = new byte[size];
+                buf.get(requestBytes);
+                var request = new String(requestBytes);
+                if (debug) {
+                    log.info("handle {}", request);
+                }
 
-                String response = "{test json ok?}";
-                byte[] result = response.getBytes(StandardCharsets.UTF_8);
-                ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 4 + result.length);
+                @Nullable String response = router.handle(request);
+                byte @Nullable [] result = response == null ? null : response.getBytes(StandardCharsets.UTF_8);
+                ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 4 + (result == null ? 0 : result.length));
                 buffer.put(WebProtocol.RESPONSE);
                 buffer.putInt(uid);
-                if (result.length < 1024) {
+                if (result == null) {
+                    buffer.putInt(-1);
+                } else if (result.length < 1024) {
                     buffer.putInt(0);
                     buffer.put(result);
                 } else {
@@ -201,7 +213,7 @@ public class WebEndpoint {
         }
 
         @Override
-        public String getUrlPath() {
+        public String getToken() {
             return urlPath;
         }
 

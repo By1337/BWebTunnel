@@ -42,12 +42,14 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame
     private volatile boolean closing;
     private final VelocityCompressor compressor;
     private final EventLoop eventLoop;
+    private final int version;
 
-    public WebSocketHandler(String staticContent, ClientList clientList, Channel channel) {
+    public WebSocketHandler(String staticContent, ClientList clientList, Channel channel, int version) {
         this.staticContent = staticContent;
         this.clientList = clientList;
         this.channel = channel;
         eventLoop = channel.eventLoop();
+        this.version = version;
         timeoutTask = eventLoop.scheduleAtFixedRate(
                 this::timeoutRequests,
                 1,
@@ -117,20 +119,19 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame
                 var request = requests.remove(uid);
                 if (request == null) return;
 
-                int uncompressedSize = content.readInt();
-                if (uncompressedSize == -1) {
+                int compressType = content.readInt();
+                if (compressType == -1) {
                     request.callback.send(HttpResponseStatus.NOT_FOUND);
                     return;
                 }
-                if (uncompressedSize < 0 || uncompressedSize > WebProtocol.MAX_PAYLOAD_SIZE) {
-                    disconnect(ctx, "Bad response size " + uncompressedSize);
+                if (compressType < 0 || compressType > WebProtocol.MAX_PAYLOAD_SIZE) {
+                    disconnect(ctx, "Bad response size " + compressType);
                     return;
                 }
-
-                if (uncompressedSize == 0) {
+                if (compressType == 0) {
                     request.callback.sendJson(content.retainedSlice());
                 } else {
-                    request.callback.sendJson(uncompress(uncompressedSize, content));
+                    request.callback.sendJson(uncompress(compressType, content));
                 }
             } else {
                 disconnect(ctx, "Unknown packet type " + type);

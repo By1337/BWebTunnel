@@ -3,7 +3,7 @@ package dev.by1337.web.client;
 import java.nio.ByteBuffer;
 import java.util.zip.Deflater;
 
-class BufCompressor {
+final class BufCompressor {
     private final Deflater deflater;
 
     BufCompressor(int level) {

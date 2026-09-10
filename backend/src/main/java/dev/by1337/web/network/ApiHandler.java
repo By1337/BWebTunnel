@@ -39,6 +39,8 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
                 }
                 byte type = content.readByte();
                 if (type == WebProtocol.HELLO) {
+                    int version = content.readInt();
+
                     int size = content.readableBytes();
                     if (size <= 0 || size >= 256) {
                         close(ctx, "bad payload size");
@@ -48,14 +50,14 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
                     content.readBytes(array);
                     String staticContent = new String(array, StandardCharsets.UTF_8);
                     var channel = ctx.channel();
-                    var ws = new WebSocketHandler(staticContent, clientList, channel);
+                    var ws = new WebSocketHandler(staticContent, clientList, channel, version);
                     clientList.newConnection(ws);
                     ctx.pipeline().replace(this, "wss", ws);
 
                     var buf = ctx.alloc().buffer();
                     buf.writeByte(WebProtocol.AUTH_STATUS);
                     buf.writeByte(1);
-                    buf.writeBytes("/api/%s/%s".formatted(ws.token(), staticContent).getBytes(StandardCharsets.UTF_8));
+                    buf.writeBytes(ws.token().getBytes(StandardCharsets.UTF_8));
                     ctx.writeAndFlush(new BinaryWebSocketFrame(buf));
                 }
             }
@@ -70,10 +72,13 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
             return;
         }
 
+        // /api/token/method
         // /api/token/method/
         // /api/token/method?key=value
+        // /api/token/method/sub?key=value
         String uri = request.uri();
-        String[] args = uri.split("/");
+        System.out.println(uri);
+        String[] args = uri.split("/", 4);
         if (args.length < 4 || !args[1].equals("api")) {
             responser.send(HttpResponseStatus.BAD_REQUEST);
             return;
