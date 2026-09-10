@@ -16,8 +16,7 @@ public class Main {
 
         ClientList clientList = new ClientList();
 
-        ConnectionListener connectionListener = new ConnectionListener(clientList);
+        ConnectionListener connectionListener = new ConnectionListener(clientList, null);
         connectionListener.startServerListener(4443);// //"ws://localhost:4443/api/ws"
     }
-
 }

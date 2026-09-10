@@ -9,6 +9,7 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.websocketx.BinaryWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketFrame;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,14 +19,23 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
 
     private static final Logger log = LoggerFactory.getLogger(ApiHandler.class);
     private final ClientList clientList;
+    private final @Nullable StaticHoster staticHoster;
 
-    ApiHandler(ClientList clientList) {
+    ApiHandler(ClientList clientList, @Nullable StaticHoster staticHoster) {
         this.clientList = clientList;
+        this.staticHoster = staticHoster;
     }
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof FullHttpRequest request) {
+            String uri = request.uri();
+            if (!uri.startsWith("/api/")) {
+                if (staticHoster == null)
+                    new HttpResponser(ctx).send(HttpResponseStatus.NOT_FOUND);
+                else staticHoster.onHttpRequest(ctx, request);
+                return;
+            }
             onHttpRequest(ctx, request);
             return;
         }
@@ -77,7 +87,7 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
         // /api/token/method?key=value
         // /api/token/method/sub?key=value
         String uri = request.uri();
-        System.out.println(uri);
+      //  System.out.println(uri);
         String[] args = uri.split("/", 4);
         if (args.length < 4 || !args[1].equals("api")) {
             responser.send(HttpResponseStatus.BAD_REQUEST);

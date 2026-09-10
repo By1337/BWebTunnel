@@ -162,6 +162,10 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame
         return this;
     }
 
+    public String staticContent() {
+        return staticContent;
+    }
+
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
         disconnect(ctx, "End of stream");

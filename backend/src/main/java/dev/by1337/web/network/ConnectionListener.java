@@ -15,6 +15,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,9 +36,11 @@ public class ConnectionListener {
                     .setUncaughtExceptionHandler((t, e) -> log.error("Caught previously unhandled exception :", e)).setDaemon(true).build())
     );
     private final ClientList clientList;
+    private final @Nullable StaticHoster staticHoster;
 
-    public ConnectionListener(ClientList clientList) {
+    public ConnectionListener(ClientList clientList, @Nullable StaticHoster staticHoster) {
         this.clientList = clientList;
+        this.staticHoster = staticHoster;
     }
 
 
@@ -67,7 +70,7 @@ public class ConnectionListener {
                                     .addLast("http", new HttpServerCodec())
                                     .addLast("aggregator", new HttpObjectAggregator(1024 * 1024))
                                     .addLast("ws", new WebSocketServerProtocolHandler("/api/ws"))
-                                    .addLast("handler", new ApiHandler(clientList));
+                                    .addLast("handler", new ApiHandler(clientList, staticHoster));
                             ;
                         }
                     })

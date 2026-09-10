@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BWebTunnel Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        input {
+            padding: 8px;
+            font-size: 14px;
+            width: 200px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 14px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+            white-space: pre-wrap;
+            word-break: break-word;
+            min-height: 20px;
+            font-family: monospace;
+        }
+        .token-info {
+            color: #666;
+            font-size: 12px;
+            margin-bottom: 15px;
+        }
+        .row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        label {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🚇 BWebTunnel Test</h1>
+    <div class="token-info">
+        Токен из пути: <span id="tokenDisplay">—</span>
+    </div>
+
+    <div class="row">
+        <label for="nameInput">name:</label>
+        <input type="text" id="nameInput" value="by1337" placeholder="Введите name">
+        <button id="sendBtn">Отправить GET запрос</button>
+    </div>
+
+    <div id="result">Здесь появится ответ...</div>
+</div>
+
+<script>
+    // Извлекаем токен из пути: /<token>/index.html
+    function getTokenFromPath() {
+        const parts = window.location.pathname.split('/').filter(Boolean);
+        // Первая часть пути — это токен
+        return parts[0] || null;
+    }
+
+    const token = getTokenFromPath();
+    document.getElementById('tokenDisplay').textContent = token || 'не найден';
+
+    const sendBtn = document.getElementById('sendBtn');
+    const nameInput = document.getElementById('nameInput');
+    const resultDiv = document.getElementById('result');
+
+    sendBtn.addEventListener('click', async () => {
+        if (!token) {
+            resultDiv.textContent = '❌ Ошибка: токен не найден в URL';
+            resultDiv.style.borderLeftColor = 'red';
+            return;
+        }
+
+        const name = nameInput.value.trim() || 'by1337';
+        const url = `/api/${token}/hello/?name=${encodeURIComponent(name)}`;
+
+        sendBtn.disabled = true;
+        resultDiv.textContent = `⏳ Запрос: ${url}`;
+        resultDiv.style.borderLeftColor = '#007bff';
+
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json, text/plain, */*'
+                }
+            });
+
+            const text = await response.text();
+
+            if (response.ok) {
+                resultDiv.textContent =
+                    `✅ Статус: ${response.status} ${response.statusText}\n` +
+                    `URL: ${url}\n\n` +
+                    `Ответ:\n${text}`;
+                resultDiv.style.borderLeftColor = 'green';
+            } else {
+                resultDiv.textContent =
+                    `⚠️ Статус: ${response.status} ${response.statusText}\n` +
+                    `URL: ${url}\n\n` +
+                    `Ответ:\n${text}`;
+                resultDiv.style.borderLeftColor = 'orange';
+            }
+        } catch (err) {
+            resultDiv.textContent =
+                `❌ Ошибка сети:\n${err.message}\n\n` +
+                `URL: ${url}`;
+            resultDiv.style.borderLeftColor = 'red';
+        } finally {
+            sendBtn.disabled = false;
+        }
+    });
+
+    // Отправка по Enter в поле name
+    nameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendBtn.click();
+    });
+</script>
+</body>
+</html>
