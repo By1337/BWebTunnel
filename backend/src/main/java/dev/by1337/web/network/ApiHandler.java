@@ -48,7 +48,7 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
                     return;
                 }
                 byte type = content.readByte();
-                if (type == WebProtocol.HELLO) {
+                if (type == WebProtocol.C2S_HELLO) {
                     int version = content.readInt();
 
                     int size = content.readableBytes();
@@ -65,7 +65,7 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
                     ctx.pipeline().replace(this, "wss", ws);
 
                     var buf = ctx.alloc().buffer();
-                    buf.writeByte(WebProtocol.AUTH_STATUS);
+                    buf.writeByte(WebProtocol.S2C_AUTH_STATUS);
                     buf.writeByte(1);
                     buf.writeBytes(ws.token().getBytes(StandardCharsets.UTF_8));
                     ctx.writeAndFlush(new BinaryWebSocketFrame(buf));

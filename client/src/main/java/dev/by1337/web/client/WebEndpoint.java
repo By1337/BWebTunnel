@@ -117,7 +117,7 @@ public class WebEndpoint {
 
                 var payload = staticContent.getBytes(StandardCharsets.UTF_8);
                 ByteBuffer buffer = ByteBuffer.allocate(4 + 1 + payload.length);
-                buffer.put(WebProtocol.HELLO);
+                buffer.put(WebProtocol.C2S_HELLO);
                 buffer.putInt(PROTOCOL_VERSION);
                 buffer.put(payload);
                 buffer.flip();
@@ -132,7 +132,8 @@ public class WebEndpoint {
             if (!last) throw new IllegalStateException("not allowed method BINARY fragmented");
             if (buf.remaining() < 1) throw new IllegalStateException("Bad payload size!");
             byte type = buf.get();
-            if (type == WebProtocol.AUTH_STATUS) {
+            if (type == WebProtocol.S2C_AUTH_STATUS) {
+                //System.out.println("IN AUTH_STATUS");
                 if (state != State.AUTHENTICATING)
                     throw new IllegalStateException("not allowed state " + state + " bot got AUTH_STATUS packet");
                 byte status = buf.get();
@@ -144,7 +145,8 @@ public class WebEndpoint {
                 urlPath = new String(url);
                 setState(State.READY);
                 authFuture.complete(this);
-            } else if (type == WebProtocol.GET) {
+            } else if (type == WebProtocol.S2C_GET) {
+                //System.out.println("IN GET");
                 if (state != State.READY)
                     throw new IllegalStateException("not allowed state " + state + " bot got GET packet");
                 int uid = buf.getInt();
@@ -160,7 +162,7 @@ public class WebEndpoint {
                 @Nullable String response = router.handle(request);
                 byte @Nullable [] result = response == null ? null : response.getBytes(StandardCharsets.UTF_8);
                 ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 4 + (result == null ? 0 : result.length));
-                buffer.put(WebProtocol.RESPONSE);
+                buffer.put(WebProtocol.C2S_RESPONSE);
                 buffer.putInt(uid);
                 if (result == null) {
                     buffer.putInt(-1);
@@ -173,6 +175,14 @@ public class WebEndpoint {
                 }
                 buffer.flip();
                 webSocket.sendBinary(buffer, true);
+            } else if (type == WebProtocol.S2C_KEEPALIVE_PING) {
+                //System.out.println("IN KEEPALIVE_PING");
+                ByteBuffer buffer = ByteBuffer.allocate(1);
+                buffer.put(WebProtocol.C2S_KEEPALIVE_PONG);
+                buffer.flip();
+                webSocket.sendBinary(buffer, true);
+            } else {
+                throw new IllegalStateException("Unknown packet " + type);
             }
             webSocket.request(1);
             return null;

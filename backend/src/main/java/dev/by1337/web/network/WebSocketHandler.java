@@ -29,6 +29,7 @@ import java.util.zip.DataFormatException;
 public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame> {
     private static final Logger log = LoggerFactory.getLogger(WebSocketHandler.class);
     private static final long REQUEST_DEADLINE_NANOS = 5_000_000_000L;
+    private static final int IDLE_TIMEOUT_MS = 60_000;
 
     private final Int2ObjectMap<RequestHolder> requests = new Int2ObjectOpenHashMap<>();
     private final PriorityQueue<RequestHolder> requestsQueue = new PriorityQueue<>(256);
@@ -39,12 +40,15 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame
     private final Channel channel;
     private final AtomicBoolean flushScheduled = new AtomicBoolean(false);
     private final ScheduledFuture<?> timeoutTask;
+    private final ScheduledFuture<?> idleTimeoutTask;
     private volatile boolean closing;
     private final VelocityCompressor compressor;
     private final EventLoop eventLoop;
     private final int version;
+    private long latestInboundTimestamp;
 
     public WebSocketHandler(String staticContent, ClientList clientList, Channel channel, int version) {
+        latestInboundTimestamp = System.currentTimeMillis();
         this.staticContent = staticContent;
         this.clientList = clientList;
         this.channel = channel;
@@ -54,6 +58,20 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame
                 this::timeoutRequests,
                 1,
                 1,
+                TimeUnit.SECONDS
+        );
+        idleTimeoutTask = eventLoop.scheduleAtFixedRate(
+                () -> {
+                    if (System.currentTimeMillis() - latestInboundTimestamp > IDLE_TIMEOUT_MS){
+                        disconnect(channel,"idle timeout");
+                        return;
+                    }
+                    var buf = channel.alloc().buffer();
+                    buf.writeByte(WebProtocol.S2C_KEEPALIVE_PING);
+                    write(new BinaryWebSocketFrame(buf));
+                },
+                15,
+                15,
                 TimeUnit.SECONDS
         );
         compressor = Natives.compress.get().create(6);
@@ -89,7 +107,7 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame
         requestsQueue.add(request);
 
         var buf = channel.alloc().buffer();
-        buf.writeByte(WebProtocol.GET);
+        buf.writeByte(WebProtocol.S2C_GET);
         buf.writeInt(request.id);
         buf.writeBytes(method.getBytes(StandardCharsets.UTF_8));
         write(new BinaryWebSocketFrame(buf));
@@ -113,8 +131,9 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame
                 disconnect(ctx, "empty payload");
                 return;
             }
+            latestInboundTimestamp = System.currentTimeMillis();
             byte type = content.readByte();
-            if (type == WebProtocol.RESPONSE) {
+            if (type == WebProtocol.C2S_RESPONSE) {
                 int uid = content.readInt();
                 var request = requests.remove(uid);
                 if (request == null) return;
@@ -133,6 +152,8 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame
                 } else {
                     request.callback.sendJson(uncompress(compressType, content));
                 }
+            } else if (type == WebProtocol.C2S_KEEPALIVE_PONG) {
+                latestInboundTimestamp = System.currentTimeMillis();
             } else {
                 disconnect(ctx, "Unknown packet type " + type);
             }
@@ -188,13 +209,17 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame
     }
 
     private void disconnect(ChannelHandlerContext ctx, String message) {
+        disconnect(ctx.channel(), message);
+    }
+    private void disconnect(Channel channel, String message) {
         closing = true;
-        if (ctx.channel().isOpen()) {
-            ctx.channel().close();
-            log.info("Disconnect connection {}, reason: {}", ctx.channel().remoteAddress(), message);
+        if (channel.isOpen()) {
+            channel.close();
+            log.info("Disconnect connection {}, reason: {}", channel.remoteAddress(), message);
         }
         clientList.removeConnection(this);
         timeoutTask.cancel(false);
+        idleTimeoutTask.cancel(false);
     }
 
     public static class RequestHolder implements Comparable<RequestHolder> {

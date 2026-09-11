@@ -13,7 +13,7 @@ public class ClientList {
 
     public WebSocketHandler newConnection(WebSocketHandler client) {
         for (; ; ) {
-            String token = Base62Converter.encode(Math.abs(ThreadLocalRandom.current().nextLong()));
+            String token = Base62Converter.encode(ThreadLocalRandom.current().nextLong());
 
             if (clientList.putIfAbsent(token, client) == null) {
                 client.setToken(token);
