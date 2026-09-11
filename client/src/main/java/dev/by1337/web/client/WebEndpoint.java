@@ -26,21 +26,40 @@ public class WebEndpoint {
     private static final Logger log = LoggerFactory.getLogger("WebEndpoint");
     private final boolean debug;
     private final String url;
-    private final String staticContent;
     private final HttpClient httpClient;
     private WebSocketConnection webSocket;
     private final RequestRouter router;
 
-    public WebEndpoint(RequestRouter router, String url, String staticContent) {
-        this(router, false, url, staticContent);
+    private final String staticContent;
+    private final @Nullable String secret;
+    private final @Nullable String description;
+
+    private final byte[] staticContentBytes;
+    private final byte @Nullable [] secretBytes;
+    private final byte @Nullable [] descriptionBytes;
+    private final int helloPayloadSize;
+    private final boolean autoConnect;
+
+    public WebEndpoint(RequestRouter router, String url, String staticContent, @Nullable String secret, @Nullable String description) {
+        this(router, false, url, staticContent, description, secret);
     }
 
-    public WebEndpoint(RequestRouter router, boolean debug, String url, String staticContent) {
+    public WebEndpoint(RequestRouter router, boolean debug, String url, String staticContent, @Nullable String secret, @Nullable String description) {
         this.router = router;
         this.debug = debug;
         this.url = url;
         this.staticContent = staticContent;
+        this.secret = secret;
+        this.description = description;
+        staticContentBytes = staticContent.getBytes(StandardCharsets.UTF_8);
+        secretBytes = secret == null ? null : secret.getBytes(StandardCharsets.UTF_8);
+        descriptionBytes = description == null ? null : description.getBytes(StandardCharsets.UTF_8);
+        helloPayloadSize = staticContentBytes.length + 4 + (secretBytes == null ? 0 : secretBytes.length + 4) + (descriptionBytes == null ? 0 : descriptionBytes.length + 4);
         httpClient = HttpClient.newBuilder().executor(WS_EXECUTOR).build();
+        autoConnect = secret != null && description != null;
+        if (autoConnect) {
+            connect();
+        }
     }
 
     public CompletableFuture<@Nullable Connection> connect() {
@@ -76,6 +95,9 @@ public class WebEndpoint {
                 log.warn("Connection closed cuz {}", msg);
             }
             conn.close();
+            if (autoConnect) {
+                connect();
+            }
         }
     }
 
@@ -95,7 +117,7 @@ public class WebEndpoint {
         private WebSocket socket;
         private volatile State state = State.CONNECTING;
         private final CompletableFuture<Connection> authFuture = new CompletableFuture<>();
-        private String urlPath;
+        private String token;
         private final BufCompressor compressor = new BufCompressor(6);
 
         @Override
@@ -115,11 +137,17 @@ public class WebEndpoint {
                     throw new IllegalStateException("not allowed state " + state + " next " + next);
                 state = State.AUTHENTICATING;
 
-                var payload = staticContent.getBytes(StandardCharsets.UTF_8);
-                ByteBuffer buffer = ByteBuffer.allocate(4 + 1 + payload.length);
+                ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 1 + helloPayloadSize);
                 buffer.put(WebProtocol.C2S_HELLO);
                 buffer.putInt(PROTOCOL_VERSION);
-                buffer.put(payload);
+                WebProtocol.writeUtf8(buffer, WebProtocol.MAX_STRING_SIZE, staticContentBytes);
+                if (secretBytes != null && descriptionBytes != null) {
+                    buffer.put((byte) 1);
+                    WebProtocol.writeUtf8(buffer, WebProtocol.MAX_STRING_SIZE, secretBytes);
+                    WebProtocol.writeUtf8(buffer, WebProtocol.MAX_STRING_SIZE, descriptionBytes);
+                } else {
+                    buffer.put((byte) 0);
+                }
                 buffer.flip();
                 socket.sendBinary(buffer, true);
             } else {
@@ -138,11 +166,7 @@ public class WebEndpoint {
                     throw new IllegalStateException("not allowed state " + state + " bot got AUTH_STATUS packet");
                 byte status = buf.get();
                 if (status != 1) throw new IllegalStateException("Authentication error " + status);
-                int size = buf.remaining();
-                if (size <= 0 || size >= 256) throw new IllegalStateException("Bad payload size " + size);
-                byte[] url = new byte[size];
-                buf.get(url);
-                urlPath = new String(url);
+                token = WebProtocol.readUtf8(buf, WebProtocol.MAX_STRING_SIZE);
                 setState(State.READY);
                 authFuture.complete(this);
             } else if (type == WebProtocol.S2C_GET) {
@@ -150,16 +174,11 @@ public class WebEndpoint {
                 if (state != State.READY)
                     throw new IllegalStateException("not allowed state " + state + " bot got GET packet");
                 int uid = buf.getInt();
-                int size = buf.remaining();
-                if (size <= 0 || size >= 256) throw new IllegalStateException("Bad payload size " + size);
-                byte[] requestBytes = new byte[size];
-                buf.get(requestBytes);
-                var request = new String(requestBytes);
+                var uri = WebProtocol.readUtf8(buf, WebProtocol.MAX_URI_SIZE);
                 if (debug) {
-                    log.info("handle {}", request);
+                    log.info("handle {}", uri);
                 }
-
-                @Nullable String response = router.handle(request);
+                @Nullable String response = router.handle(uri);
                 byte @Nullable [] result = response == null ? null : response.getBytes(StandardCharsets.UTF_8);
                 ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 4 + (result == null ? 0 : result.length));
                 buffer.put(WebProtocol.C2S_RESPONSE);
@@ -181,6 +200,14 @@ public class WebEndpoint {
                 buffer.put(WebProtocol.C2S_KEEPALIVE_PONG);
                 buffer.flip();
                 webSocket.sendBinary(buffer, true);
+            } else if (type == WebProtocol.C2S_ERROR_MSG) {
+                byte fatal = buf.get();
+                String msg = WebProtocol.readUtf8(buf, WebProtocol.MAX_STRING_SIZE);
+                if (fatal == 1) {
+                    onDisconnected(this, null, msg);
+                } else {
+                    log.error("Error {}", msg);
+                }
             } else {
                 throw new IllegalStateException("Unknown packet " + type);
             }
@@ -224,7 +251,7 @@ public class WebEndpoint {
 
         @Override
         public String getToken() {
-            return urlPath;
+            return token;
         }
 
         public enum State {

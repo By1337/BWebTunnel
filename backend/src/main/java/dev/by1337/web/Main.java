@@ -1,5 +1,7 @@
 package dev.by1337.web;
 
+import dev.by1337.web.db.Database;
+import dev.by1337.web.db.FileDatabase;
 import dev.by1337.web.network.ConnectionListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,13 +12,15 @@ public class Main {
 
     private static final Logger log = LoggerFactory.getLogger(Main.class);
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) {
         SLF4JBridgeHandler.removeHandlersForRootLogger();
         SLF4JBridgeHandler.install();
 
+        Database database = new FileDatabase("./users.json");
+
         ClientList clientList = new ClientList();
 
-        ConnectionListener connectionListener = new ConnectionListener(clientList, null);
+        ConnectionListener connectionListener = new ConnectionListener(clientList, null, database);
         connectionListener.startServerListener(4443);// //"ws://localhost:4443/api/ws"
     }
 }

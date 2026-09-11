@@ -28,7 +28,7 @@ final class RequestParser {
         Map<String, List<String>> argsMap = new HashMap<>();
         String key = null;
         String value = null;
-        String route = null;
+        String path = null;
 
         boolean isParams = false;
         boolean inValue = false;
@@ -86,7 +86,7 @@ final class RequestParser {
                     if (buf.hasRemaining()){
                         byte[] arr = new byte[buf.remaining()];
                         buf.get(arr);
-                        route = new String(arr, StandardCharsets.UTF_8);
+                        path = new String(arr, StandardCharsets.UTF_8);
                     }
                     if (c == '\0') break;
                     buf.clear();
@@ -95,7 +95,7 @@ final class RequestParser {
                 }
             }
         }
-        return new RequestParams(route, argsMap);
+        return new RequestParams(path, argsMap);
     }
 
     private static void putChar(ByteBuffer buf, ExpReader reader, char c) throws ParseException {

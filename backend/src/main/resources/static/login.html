@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BWebTunnel</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="auth-card">
+    <h1>BWebTunnel</h1>
+    <form action="#" method="post" onsubmit="event.preventDefault();">
+        <div class="form-group">
+            <label for="login">логин</label>
+            <input type="text" id="login" name="login" placeholder="ваш ник или email" autocomplete="username">
+        </div>
+
+        <div class="form-group">
+            <label for="password">пароль</label>
+            <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password">
+        </div>
+
+        <div class="actions">
+            <button type="submit" class="btn btn-login" onclick="sendAuth('/session/login')">войти</button>
+
+            <div class="separator">
+                <span class="separator-line"></span>
+                <span>или</span>
+                <span class="separator-line"></span>
+            </div>
+
+            <button type="button" class="btn btn-register" onclick="sendAuth('/session/register')">
+                зарегистрироваться
+            </button>
+        </div>
+    </form>
+
+    <div class="footer-note">
+        <a href="#">забыли пароль?</a>
+    </div>
+</div>
+
+<script>
+    (async function checkSession() {
+        try {
+            const res = await fetch('/session/me', {
+                method: 'GET',
+                credentials: 'same-origin'
+            });
+            if (res.ok) {
+                window.location.replace('/dashboard.html');
+            }
+        } catch (err) {
+            console.warn('session check failed:', err);
+        }
+    })();
+
+    async function sendAuth(endpoint) {
+        const login = document.getElementById('login').value.trim();
+        const password = document.getElementById('password').value;
+
+        if (!login || !password) {
+            alert('Заполните логин и пароль');
+            return;
+        }
+
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ login, password })
+            });
+
+            const data = await response.json().catch(() => ({}));
+
+            if (response.ok) {
+                window.location.replace('/dashboard.html');
+                //window.location.href = '/dashboard.html';
+            } else {
+                console.error('Ошибка:', response.status, data);
+                alert(data.message || `Ошибка ${response.status}`);
+            }
+        } catch (err) {
+            console.error('Сетевая ошибка:', err);
+            alert('Не удалось связаться с сервером');
+        }
+    }
+</script></body>
+</html>

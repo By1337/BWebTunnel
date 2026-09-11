@@ -3,6 +3,9 @@ package dev.by1337.web.network;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import dev.by1337.web.ClientList;
+import dev.by1337.web.db.Database;
+import dev.by1337.web.network.auth.AuthHandler;
+import dev.by1337.web.network.content.GetStaticContentHandler;
 import dev.by1337.web.util.LazyLoad;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
@@ -36,11 +39,15 @@ public class ConnectionListener {
                     .setUncaughtExceptionHandler((t, e) -> log.error("Caught previously unhandled exception :", e)).setDaemon(true).build())
     );
     private final ClientList clientList;
-    private final @Nullable StaticHoster staticHoster;
+    private final @Nullable GetStaticContentHandler contentHandler;
+    private final Database database;
+    private final AuthHandler auth;
 
-    public ConnectionListener(ClientList clientList, @Nullable StaticHoster staticHoster) {
+    public ConnectionListener(ClientList clientList, @Nullable GetStaticContentHandler contentHandler, Database database) {
         this.clientList = clientList;
-        this.staticHoster = staticHoster;
+        this.contentHandler = contentHandler;
+        this.database = database;
+        auth = new AuthHandler(clientList, database);
     }
 
 
@@ -70,7 +77,7 @@ public class ConnectionListener {
                                     .addLast("http", new HttpServerCodec())
                                     .addLast("aggregator", new HttpObjectAggregator(1024 * 1024))
                                     .addLast("ws", new WebSocketServerProtocolHandler("/api/ws"))
-                                    .addLast("handler", new ApiHandler(clientList, staticHoster));
+                                    .addLast("handler", new ApiHandler(clientList, contentHandler, database, auth));
                             ;
                         }
                     })

@@ -1,7 +1,14 @@
 package dev.by1337.web.network;
 
 import dev.by1337.web.ClientList;
+import dev.by1337.web.ServerWebProtocol;
 import dev.by1337.web.client.WebProtocol;
+import dev.by1337.web.db.Database;
+import dev.by1337.web.network.auth.AuthHandler;
+import dev.by1337.web.network.content.GetStaticContentHandler;
+import dev.by1337.web.network.service.ServiceConnection;
+import dev.by1337.web.network.service.ServiceGroup;
+import dev.by1337.web.util.StreamJsonWriter;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -13,27 +20,33 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.charset.StandardCharsets;
-
 final class ApiHandler extends SimpleChannelInboundHandler<Object> {
 
     private static final Logger log = LoggerFactory.getLogger(ApiHandler.class);
     private final ClientList clientList;
-    private final @Nullable StaticHoster staticHoster;
+    private final @Nullable GetStaticContentHandler contentHandler;
+    private final Database database;
+    private final AuthHandler auth;
 
-    ApiHandler(ClientList clientList, @Nullable StaticHoster staticHoster) {
+    ApiHandler(ClientList clientList, @Nullable GetStaticContentHandler contentHandler, Database database, AuthHandler auth) {
         this.clientList = clientList;
-        this.staticHoster = staticHoster;
+        this.contentHandler = contentHandler;
+        this.database = database;
+        this.auth = auth;
     }
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof FullHttpRequest request) {
             String uri = request.uri();
+            if (uri.startsWith("/session/")) {
+                auth.on(ctx, request);
+                return;
+            }
             if (!uri.startsWith("/api/")) {
-                if (staticHoster == null)
+                if (contentHandler == null)
                     new HttpResponser(ctx).send(HttpResponseStatus.NOT_FOUND);
-                else staticHoster.onHttpRequest(ctx, request);
+                else contentHandler.onHttpRequest(ctx, request);
                 return;
             }
             onHttpRequest(ctx, request);
@@ -49,31 +62,44 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
                 }
                 byte type = content.readByte();
                 if (type == WebProtocol.C2S_HELLO) {
-                    int version = content.readInt();
-
-                    int size = content.readableBytes();
-                    if (size <= 0 || size >= 256) {
-                        close(ctx, "bad payload size");
-                        return;
-                    }
-                    byte[] array = new byte[size];
-                    content.readBytes(array);
-                    String staticContent = new String(array, StandardCharsets.UTF_8);
                     var channel = ctx.channel();
-                    var ws = new WebSocketHandler(staticContent, clientList, channel, version);
-                    clientList.newConnection(ws);
-                    ctx.pipeline().replace(this, "wss", ws);
+
+                    int version = content.readInt();
+                    String staticContent = ServerWebProtocol.readUtf8(content, WebProtocol.MAX_STRING_SIZE, ctx);
+                    if (staticContent == null) return;
+                    var service = new ServiceConnection(staticContent, clientList, channel, version);
+
+                    boolean use128Token = false;
+                    if (content.readByte() == 1) { // has group
+                        String secret = ServerWebProtocol.readUtf8(content, WebProtocol.MAX_STRING_SIZE, ctx);
+                        if (secret == null) return;
+                        String desc = ServerWebProtocol.readUtf8(content, WebProtocol.MAX_STRING_SIZE, ctx);
+                        if (desc == null) return;
+                        if (database.isValidSecret(secret)) {
+                            service.setGroupSecret(secret);
+                            service.setDescription(desc);
+                            use128Token = true;
+                        } else {
+                            var buf = channel.alloc().buffer();
+                            buf.writeByte(WebProtocol.C2S_ERROR_MSG);
+                            buf.writeByte(0);
+                            ServerWebProtocol.writeUtf8(buf, WebProtocol.MAX_STRING_SIZE, "Invalid secret");
+                            service.write(new BinaryWebSocketFrame(buf));
+                        }
+                    }
+
+                    clientList.newConnection(service, use128Token);
+                    ctx.pipeline().replace(this, "service", service);
 
                     var buf = ctx.alloc().buffer();
                     buf.writeByte(WebProtocol.S2C_AUTH_STATUS);
                     buf.writeByte(1);
-                    buf.writeBytes(ws.token().getBytes(StandardCharsets.UTF_8));
+                    ServerWebProtocol.writeUtf8(buf, WebProtocol.MAX_STRING_SIZE, service.token());
                     ctx.writeAndFlush(new BinaryWebSocketFrame(buf));
                 }
             }
         }
     }
-
 
     private void onHttpRequest(ChannelHandlerContext ctx, FullHttpRequest request) {
         HttpResponser responser = new HttpResponser(ctx);
@@ -87,9 +113,29 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
         // /api/token/method?key=value
         // /api/token/method/sub?key=value
         String uri = request.uri();
-      //  System.out.println(uri);
+        //  System.out.println(uri);
         String[] args = uri.split("/", 4);
-        if (args.length < 4 || !args[1].equals("api")) {
+        if (args.length < 3 || !args[1].equals("api")) {
+            responser.send(HttpResponseStatus.BAD_REQUEST);
+            return;
+        }
+        if (args[2].equals("dashboard")) {
+            var secret = auth.getSecret(request);
+            if (secret == null) {
+                responser.send(HttpResponseStatus.UNAUTHORIZED);
+                return;
+            }
+            ServiceGroup group = clientList.getGroup(secret);
+            if (group == null) {
+                responser.sendJson("{\"secret\":\"" + secret + "\",\"services\":[]}");
+                return;
+            }
+            var buf = ctx.alloc().buffer();
+            group.toJson(new StreamJsonWriter(buf));
+            responser.sendJson(buf);
+            return;
+        }
+        if (args.length < 4) {
             responser.send(HttpResponseStatus.BAD_REQUEST);
             return;
         }

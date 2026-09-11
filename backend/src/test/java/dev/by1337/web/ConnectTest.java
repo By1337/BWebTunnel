@@ -1,12 +1,16 @@
 package dev.by1337.web;
 
+import com.google.common.hash.Hashing;
 import dev.by1337.web.client.RequestParams;
 import dev.by1337.web.client.RequestRouter;
 import dev.by1337.web.client.WebEndpoint;
+import dev.by1337.web.db.FileDatabase;
+import dev.by1337.web.db.User;
 import dev.by1337.web.network.ConnectionListener;
-import dev.by1337.web.network.StaticHoster;
+import dev.by1337.web.network.content.GetStaticContentHandler;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 class ConnectTest {
@@ -17,13 +21,24 @@ class ConnectTest {
     @Test
     void startServer() throws Exception {
         var clients = new ClientList();
-        server = new ConnectionListener(clients, new StaticHoster(clients));
+        User user = new User("by1337", Hashing.sha256().hashBytes("password".getBytes(StandardCharsets.UTF_8)).toString());
+        FileDatabase fileDatabase = new FileDatabase("./static/users.json");
+        fileDatabase.addUser(user);
+
+        server = new ConnectionListener(clients, new GetStaticContentHandler(clients), fileDatabase);
         port = server.startServerListener(4443);// //"ws://localhost:4443/api/ws"
 
         WebEndpoint webEndpoint = new WebEndpoint(
                 new RequestRouter()
-                .route("/hello", p -> "Hello " + p.orDefault("name", RequestParams::getString, () -> "Bob"))
-                , true, "ws://localhost:%d/api/ws".formatted(port), "helloworld");
+                        .route("/hello", p -> {
+                            return "Hello " + p.orDefault("name", RequestParams::getString, () -> "Bob");
+                        })
+                , true,
+                "ws://localhost:%d/api/ws".formatted(port),
+                "helloworld",
+                user.secret,
+                "test group"
+        );
 
         token = webEndpoint.connect().get(5, TimeUnit.SECONDS).getToken();
 

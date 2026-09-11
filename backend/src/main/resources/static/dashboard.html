@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BWebTunnel — Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="auth-card dashboard-card">
+    <header class="dash-header">
+        <h1>BWebTunnel</h1>
+        <button type="button" class="btn btn-ghost btn-logout" onclick="logout()">выйти</button>
+    </header>
+
+    <!-- Секрет -->
+    <section class="secret-block">
+        <label>ваш секрет</label>
+        <button type="button" class="secret" id="secret" title="нажмите, чтобы скопировать">
+            <span id="secret-text">…</span>
+            <span class="secret-copy-hint" id="secret-hint">copy</span>
+        </button>
+    </section>
+
+    <!-- Сервисы -->
+    <section class="services-block">
+        <label>сервисы</label>
+        <ul class="services" id="services">
+            <li class="services-empty">загрузка…</li>
+        </ul>
+    </section>
+</div>
+
+<script>
+    const secretEl  = document.getElementById('secret');
+    const secretTxt = document.getElementById('secret-text');
+    const secretHint= document.getElementById('secret-hint');
+    const servicesEl= document.getElementById('services');
+    const statusTxt = document.getElementById('status-text');
+
+    let currentSecret = '';
+
+    // ---- загрузка ----
+    (async function load() {
+        try {
+            const res = await fetch('/api/dashboard', {
+                method: 'GET',
+                credentials: 'same-origin',
+                cache: 'no-store'
+            });
+
+            if (res.status === 401 || res.status === 403) {
+                window.location.replace('/');
+                return;
+            }
+            if (!res.ok) {
+                statusTxt.textContent = 'ошибка ' + res.status;
+                servicesEl.innerHTML = '<li class="services-empty">не удалось загрузить</li>';
+                return;
+            }
+
+            const data = await res.json();
+            renderSecret(data.secret || '');
+            renderServices(data.services || []);
+        } catch (err) {
+            console.error(err);
+            statusTxt.textContent = 'нет связи';
+            servicesEl.innerHTML = '<li class="services-empty">нет связи с сервером</li>';
+        }
+    })();
+
+    // ---- рендер секрета ----
+    function renderSecret(s) {
+        currentSecret = s;
+        secretTxt.textContent = s || '(нет)';
+    }
+
+    secretEl.addEventListener('click', async () => {
+        if (!currentSecret) return;
+        try {
+            await navigator.clipboard.writeText(currentSecret);
+            secretHint.textContent = 'скопировано';
+            secretHint.classList.add('copied');
+            setTimeout(() => {
+                secretHint.textContent = 'copy';
+                secretHint.classList.remove('copied');
+            }, 1400);
+        } catch (e) {
+            // fallback для http/старых браузеров
+            const ta = document.createElement('textarea');
+            ta.value = currentSecret;
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); } catch (_) {}
+            document.body.removeChild(ta);
+            secretHint.textContent = 'скопировано';
+            setTimeout(() => secretHint.textContent = 'copy', 1400);
+        }
+    });
+
+    // ---- рендер сервисов ----
+    function renderServices(list) {
+        servicesEl.innerHTML = '';
+        if (!list.length) {
+            servicesEl.innerHTML = '<li class="services-empty">пока пусто</li>';
+            return;
+        }
+        for (const s of list) {
+            const li = document.createElement('li');
+            li.className = 'service';
+
+            const url = '/' + encodeURIComponent(s.token) + '/' + encodeURIComponent(s.content);
+
+            li.innerHTML = `
+                <a class="service-link" href="${url}">
+                    <span class="service-content">${escapeHtml(s.content)}</span>
+                    <span class="service-token">${escapeHtml(s.token)}</span>
+                    <span class="service-desc">${escapeHtml(s.description || '')}</span>
+                </a>
+            `;
+            servicesEl.appendChild(li);
+        }
+    }
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({
+            '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        })[c]);
+    }
+
+    // ---- logout ----
+    async function logout() {
+        try {
+            await fetch('/session/logout', {
+                method: 'POST',
+                credentials: 'same-origin'
+            });
+        } catch (e) { /* ignore */ }
+        window.location.replace('/');
+    }
+</script>
+</body>
+</html>

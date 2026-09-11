@@ -28,7 +28,7 @@ public class RequestRouter {
     }
 
     public RequestRouter route(String path, Function<RequestParams, @Nullable String> f) {
-        handlers.put(RequestParams.cleanupRoute(path), f);
+        handlers.put(RequestParams.cleanupPath(path), f);
         return this;
     }
 }

@@ -8,11 +8,11 @@ import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 public final class RequestParams {
-    private final String route;
+    private final String path;
     private final Map<String, List<String>> params;
 
-    public RequestParams(String route, Map<String, List<String>> params) {
-        this.route = cleanupRoute(route);
+    public RequestParams(String path, Map<String, List<String>> params) {
+        this.path = cleanupPath(path);
         this.params = params;
     }
 
@@ -34,13 +34,17 @@ public final class RequestParams {
         return params.get(key);
     }
 
+    public String getString(String key, String def) {
+        return orDefault(key, RequestParams::getString, () -> def);
+    }
+
     public @Nullable String getString(String key) {
         var v = params.get(key);
         if (v == null || v.isEmpty()) return null;
         return v.get(0);
     }
 
-    public static String cleanupRoute(String in) {
+    public static String cleanupPath(String in) {
         if (in.isBlank()) return "/";
         if (!in.startsWith("/")) in = '/' + in;
         if (in.endsWith("/")) return in.substring(0, in.length() - 1);
@@ -48,7 +52,7 @@ public final class RequestParams {
     }
 
     public String route() {
-        return route;
+        return path;
     }
 
     public Map<String, List<String>> params() {
@@ -58,7 +62,7 @@ public final class RequestParams {
     @Override
     public String toString() {
         return "RequestParams{" +
-                "route='" + route + '\'' +
+                "route='" + path + '\'' +
                 ", params=" + params +
                 '}';
     }

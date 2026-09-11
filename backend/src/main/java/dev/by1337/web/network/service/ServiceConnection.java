@@ -1,9 +1,11 @@
-package dev.by1337.web.network;
+package dev.by1337.web.network.service;
 
 import com.velocitypowered.natives.compression.VelocityCompressor;
 import com.velocitypowered.natives.util.Natives;
 import dev.by1337.web.ClientList;
+import dev.by1337.web.ServerWebProtocol;
 import dev.by1337.web.client.WebProtocol;
+import dev.by1337.web.network.HttpResponser;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -16,6 +18,7 @@ import io.netty.util.concurrent.ScheduledFuture;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,16 +29,14 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.DataFormatException;
 
-public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame> {
-    private static final Logger log = LoggerFactory.getLogger(WebSocketHandler.class);
+public class ServiceConnection extends SimpleChannelInboundHandler<WebSocketFrame> {
+    private static final Logger log = LoggerFactory.getLogger(ServiceConnection.class);
     private static final long REQUEST_DEADLINE_NANOS = 5_000_000_000L;
     private static final int IDLE_TIMEOUT_MS = 60_000;
 
     private final Int2ObjectMap<RequestHolder> requests = new Int2ObjectOpenHashMap<>();
     private final PriorityQueue<RequestHolder> requestsQueue = new PriorityQueue<>(256);
     private int requestId;
-    private String token;
-    private final String staticContent;
     private final ClientList clientList;
     private final Channel channel;
     private final AtomicBoolean flushScheduled = new AtomicBoolean(false);
@@ -47,7 +48,12 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame
     private final int version;
     private long latestInboundTimestamp;
 
-    public WebSocketHandler(String staticContent, ClientList clientList, Channel channel, int version) {
+    private String token;
+    private final String staticContent;
+    private @Nullable String description;
+    private @Nullable String groupSecret;
+
+    public ServiceConnection(String staticContent, ClientList clientList, Channel channel, int version) {
         latestInboundTimestamp = System.currentTimeMillis();
         this.staticContent = staticContent;
         this.clientList = clientList;
@@ -62,8 +68,8 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame
         );
         idleTimeoutTask = eventLoop.scheduleAtFixedRate(
                 () -> {
-                    if (System.currentTimeMillis() - latestInboundTimestamp > IDLE_TIMEOUT_MS){
-                        disconnect(channel,"idle timeout");
+                    if (System.currentTimeMillis() - latestInboundTimestamp > IDLE_TIMEOUT_MS) {
+                        disconnect(channel, "idle timeout");
                         return;
                     }
                     var buf = channel.alloc().buffer();
@@ -109,7 +115,7 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame
         var buf = channel.alloc().buffer();
         buf.writeByte(WebProtocol.S2C_GET);
         buf.writeInt(request.id);
-        buf.writeBytes(method.getBytes(StandardCharsets.UTF_8));
+        ServerWebProtocol.writeUtf8(buf, WebProtocol.MAX_URI_SIZE, method);
         write(new BinaryWebSocketFrame(buf));
     }
 
@@ -178,7 +184,7 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame
         return token;
     }
 
-    public WebSocketHandler setToken(String token) {
+    public ServiceConnection setToken(String token) {
         this.token = token;
         return this;
     }
@@ -211,6 +217,25 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame
     private void disconnect(ChannelHandlerContext ctx, String message) {
         disconnect(ctx.channel(), message);
     }
+
+    public @Nullable String description() {
+        return description;
+    }
+
+    public ServiceConnection setDescription(@Nullable String description) {
+        this.description = description;
+        return this;
+    }
+
+    public @Nullable String groupSecret() {
+        return groupSecret;
+    }
+
+    public ServiceConnection setGroupSecret(@Nullable String groupSecret) {
+        this.groupSecret = groupSecret;
+        return this;
+    }
+
     private void disconnect(Channel channel, String message) {
         closing = true;
         if (channel.isOpen()) {

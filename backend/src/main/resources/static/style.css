@@ -1,0 +1,439 @@
+*{
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html, body {
+  height: 100%;
+}
+body {
+  /* холодный сине-фиолетовый градиент — глубокий, спокойный */
+  background:
+    radial-gradient(ellipse at 50% 0%, #1a1730 0%, transparent 55%),
+    radial-gradient(ellipse at 20% 100%, #141228 0%, transparent 60%),
+    linear-gradient(180deg, #0c0a18 0%, #080614 60%, #06040f 100%);
+  background-attachment: fixed;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  color: #e6edf3;
+  overflow-x: hidden;
+  position: relative;
+}
+/* очень мягкое свечение-дымка по центру — «глубина» */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(
+    600px circle at 50% 45%,
+    rgba(110, 90, 200, 0.07) 0%,
+    rgba(110, 90, 200, 0.03) 30%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+/* тонкая виньетка по краям — усиливает ощущение глубины */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    rgba(0, 0, 0, 0.35) 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+.auth-card {
+  position: relative;
+  z-index: 1;
+  /* стекло — почти без границ, только намёк */
+  background: rgba(20, 18, 34, 0.55);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid rgba(140, 120, 220, 0.08);
+  border-radius: 22px;
+  padding: 2.75rem 2rem 2.25rem;
+  width: 100%;
+  max-width: 380px;
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(255, 255, 255, 0.015) inset,
+    0 0 60px rgba(90, 70, 180, 0.05);
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.auth-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(150, 130, 230, 0.15);
+  box-shadow:
+    0 36px 90px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset,
+    0 0 80px rgba(100, 80, 200, 0.08);
+}
+h1 {
+  font-size: 1.85rem;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  color: #eef1f6;
+  margin-bottom: 0.35rem;
+  text-align: center;
+}
+/* статус «secure connection» с пульсирующей точкой */
+.status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  color: #6a6485;
+  letter-spacing: 0.6px;
+  margin-bottom: 2.25rem;
+  text-transform: lowercase;
+}
+.status .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #8b6fd4;
+  box-shadow: 0 0 8px rgba(139, 111, 212, 0.8);
+  position: relative;
+}
+.status .dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px solid rgba(139, 111, 212, 0.4);
+  animation: pulse 2.4s ease-out infinite;
+}
+@keyframes pulse {
+  0%   { transform: scale(0.8); opacity: 0.9; }
+  70%  { transform: scale(1.9); opacity: 0; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.form-group {
+  margin-bottom: 1.2rem;
+}
+label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #9a92b5;
+  margin-bottom: 0.55rem;
+  letter-spacing: 0.4px;
+  text-transform: lowercase;
+}
+input {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  background-color: rgba(10, 8, 20, 0.55);
+  border: 1px solid rgba(120, 100, 190, 0.12);
+  border-radius: 12px;
+  font-size: 0.95rem;
+  color: #e6edf3;
+  outline: none;
+  transition: border 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  font-family: inherit;
+}
+input:hover {
+  border-color: rgba(140, 120, 210, 0.22);
+}
+input:focus {
+  border-color: rgba(150, 125, 230, 0.55);
+  box-shadow:
+    0 0 0 3px rgba(120, 95, 210, 0.12),
+    0 0 20px rgba(120, 95, 210, 0.08);
+  background-color: rgba(10, 8, 20, 0.8);
+}
+input::placeholder {
+  color: #4a4460;
+  font-weight: 300;
+}
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin-top: 2rem;
+}
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.9rem 1.25rem;
+  border-radius: 12px;
+  font-size: 0.92rem;
+  font-weight: 500;
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  letter-spacing: 0.3px;
+  background: transparent;
+  color: #e6edf3;
+}
+.btn:active {
+  transform: scale(0.985);
+}
+/* войти — приглушённый фиолетовый, с мягким свечением */
+.btn-login {
+  background: linear-gradient(135deg, #5a45a8 0%, #4a3790 100%);
+  border: 1px solid rgba(150, 125, 230, 0.25);
+  color: #f0edff;
+  box-shadow:
+    0 6px 24px rgba(90, 69, 168, 0.25),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+.btn-login:hover {
+  background: linear-gradient(135deg, #6851bb 0%, #56429f 100%);
+  border-color: rgba(170, 145, 245, 0.4);
+  box-shadow:
+    0 10px 32px rgba(105, 81, 187, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  transform: translateY(-1px);
+}
+/* зарегистрироваться — почти прозрачная, вторичная */
+.btn-register {
+  background-color: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(120, 100, 190, 0.12);
+  color: #b8b0d0;
+}
+.btn-register:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(150, 125, 230, 0.25);
+  color: #e6edf3;
+}
+.separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 0.15rem 0;
+  color: #4d4765;
+  font-size: 0.7rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.separator-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(120, 100, 190, 0.15),
+    transparent
+  );
+}
+.footer-note {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #5a5475;
+  margin-top: 1.75rem;
+  letter-spacing: 0.2px;
+}
+.footer-note a {
+  color: #8a82a5;
+  text-decoration: none;
+  border-bottom: 1px dotted rgba(120, 100, 190, 0.25);
+  transition: color 0.2s ease, border-color 0.2s ease;
+  padding-bottom: 1px;
+}
+.footer-note a:hover {
+  color: #b8a2ff;
+  border-bottom-color: rgba(184, 162, 255, 0.6);
+}
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #e6edf3;
+  -webkit-box-shadow: 0 0 0 1000px #0a0814 inset !important;
+  border-color: rgba(120, 100, 190, 0.2) !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+@media (max-width: 400px) {
+  .auth-card {
+    padding: 2rem 1.4rem 1.75rem;
+    border-radius: 18px;
+  }
+  h1 {
+    font-size: 1.6rem;
+  }
+}
+/* ===== Dashboard ===== */
+
+.dashboard-card {
+    max-width: 480px;
+    padding: 2rem 1.75rem 1.75rem;
+}
+
+.dash-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.35rem;
+}
+.dash-header h1 {
+    text-align: left;
+    margin-bottom: 0;
+    font-size: 1.5rem;
+}
+.btn-logout {
+    width: auto;
+    padding: 0.45rem 0.85rem;
+    font-size: 0.78rem;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(120, 100, 190, 0.15);
+    color: #b8b0d0;
+}
+.btn-logout:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-color: rgba(200, 120, 180, 0.3);
+    color: #f0d5e6;
+}
+
+.dashboard-card .status {
+    justify-content: flex-start;
+    margin-bottom: 1.5rem;
+}
+
+/* --- секрет --- */
+.secret-block,
+.services-block {
+    margin-bottom: 1.5rem;
+}
+.secret-block label,
+.services-block label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #9a92b5;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.6px;
+    text-transform: lowercase;
+}
+
+.secret {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.85rem 1rem;
+    background-color: rgba(10, 8, 20, 0.55);
+    border: 1px solid rgba(120, 100, 190, 0.12);
+    border-radius: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    color: #cdbfff;
+    cursor: pointer;
+    text-align: left;
+    transition: border 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
+}
+.secret:hover {
+    border-color: rgba(150, 125, 230, 0.35);
+    background-color: rgba(10, 8, 20, 0.75);
+    box-shadow: 0 0 20px rgba(120, 95, 210, 0.08);
+}
+.secret:active {
+    transform: scale(0.995);
+}
+#secret-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+.secret-copy-hint {
+    flex-shrink: 0;
+    font-family: system-ui, sans-serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #5a5475;
+    transition: color 0.2s ease;
+}
+.secret:hover .secret-copy-hint {
+    color: #b8a2ff;
+}
+.secret-copy-hint.copied {
+    color: #8bd9a3;
+}
+
+/* --- список сервисов --- */
+.services {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0;
+}
+.services-empty {
+    padding: 0.9rem 1rem;
+    font-size: 0.82rem;
+    color: #4d4765;
+    text-align: center;
+    border: 1px dashed rgba(120, 100, 190, 0.12);
+    border-radius: 12px;
+}
+.service-link {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+        "desc    desc"
+        "content token";
+    gap: 0.25rem 0.75rem;
+    padding: 0.85rem 1rem;
+    background-color: rgba(10, 8, 20, 0.55);
+    border: 1px solid rgba(120, 100, 190, 0.12);
+    border-radius: 12px;
+    text-decoration: none;
+    color: inherit;
+    transition: border 0.2s ease, background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.service-link:hover {
+    background-color: rgba(20, 16, 40, 0.75);
+    border-color: rgba(150, 125, 230, 0.35);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(90, 69, 168, 0.18);
+}
+
+.service-desc {
+    grid-area: desc;
+    font-size: 0.92rem;
+    font-weight: 500;
+    color: #eef1f6;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.service-content {
+    grid-area: content;
+    font-size: 0.76rem;
+    color: #9a92b5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.service-token {
+    grid-area: token;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.7rem;
+    color: #6a6485;
+    align-self: center;
+    flex-shrink: 0;
+}
+
+.service-desc:empty {
+    display: none;
+}
