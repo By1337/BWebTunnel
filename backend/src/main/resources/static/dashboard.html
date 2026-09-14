@@ -12,6 +12,10 @@
         <h1>BWebTunnel</h1>
         <button type="button" class="btn btn-ghost btn-logout" onclick="logout()">выйти</button>
     </header>
+    <p class="status">
+        <span class="dot"></span>
+        <span id="status-text">secure connection</span>
+    </p>
 
     <!-- Секрет -->
     <section class="secret-block">
@@ -26,7 +30,7 @@
     <section class="services-block">
         <label>сервисы</label>
         <ul class="services" id="services">
-            <li class="services-empty">загрузка…</li>
+            <li class="services-empty skeleton">загрузка…</li>
         </ul>
     </section>
 </div>
@@ -50,7 +54,7 @@
             });
 
             if (res.status === 401 || res.status === 403) {
-                window.location.replace('/');
+                window.location.replace('/login.html');
                 return;
             }
             if (!res.ok) {

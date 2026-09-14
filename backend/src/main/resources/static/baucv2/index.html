@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auction Logs</title>
+    <style>
+        :root {
+            --bg: #12141a;
+            --bg-elev: #1a1d26;
+            --bg-input: #232733;
+            --border: #2c313f;
+            --border-hover: #3a4053;
+            --text: #e6e8ee;
+            --text-dim: #8a91a3;
+            --text-faint: #5c6375;
+            --accent: #4f8cff;
+            --accent-hover: #6fa1ff;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d29922;
+            --purple: #a371f7;
+            --cyan: #39c5cf;
+            --orange: #db8b35;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 14px;
+            min-height: 100%;
+        }
+
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(18, 20, 26, 0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 20px;
+        }
+
+        .topbar-inner {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            gap: 12px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+
+        h1 .icon { margin-right: 8px; }
+
+        .token-badge {
+            font-size: 11px;
+            color: var(--text-faint);
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            background: var(--bg-input);
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 40vw;
+        }
+
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 8px;
+        }
+
+        .filters .full { grid-column: 1 / -1; }
+
+        .field {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .field label {
+            font-size: 10.5px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--text-faint);
+            font-weight: 600;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 8px 10px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 13px;
+            font-family: inherit;
+            transition: border-color 0.12s, background 0.12s;
+            outline: none;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--accent);
+            background: #262b38;
+        }
+
+        input::placeholder { color: var(--text-faint); }
+
+        input.mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.12s;
+        }
+
+        button:hover:not(:disabled) { background: var(--accent-hover); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        button.ghost {
+            background: transparent;
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+        }
+
+        button.ghost:hover:not(:disabled) {
+            background: var(--bg-input);
+            color: var(--text);
+        }
+
+        .status {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-left: auto;
+            font-family: ui-monospace, monospace;
+        }
+
+        .logs {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 16px 20px 60px;
+        }
+
+        .log-row {
+            background: var(--bg-elev);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 6px;
+            display: grid;
+            grid-template-columns: 70px 1fr auto;
+            gap: 14px;
+            align-items: center;
+            transition: border-color 0.12s, transform 0.08s;
+        }
+
+        .log-row:hover {
+            border-color: var(--border-hover);
+            transform: translateX(1px);
+        }
+
+        .log-id {
+            font-family: ui-monospace, monospace;
+            font-size: 11px;
+            color: var(--text-faint);
+            text-align: right;
+        }
+
+        .log-main {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .log-top {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .log-type {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(79, 140, 255, 0.12);
+            color: var(--accent);
+            border: 1px solid rgba(79, 140, 255, 0.25);
+            white-space: nowrap;
+        }
+
+        .log-detail {
+            font-size: 13px;
+            color: var(--text);
+            word-break: break-word;
+            line-height: 1.45;
+        }
+
+        .log-detail .sep { color: var(--text-faint); margin: 0 6px; }
+
+        .player {
+            color: var(--cyan);
+            font-weight: 500;
+            cursor: pointer;
+            transition: color 0.12s;
+        }
+
+        .player:hover { color: #7dd8e0; text-decoration: underline; }
+
+        .item {
+            color: var(--purple);
+            font-weight: 500;
+        }
+
+        .count {
+            color: var(--orange);
+            font-family: ui-monospace, monospace;
+            font-size: 12px;
+        }
+
+        .price {
+            color: var(--green);
+            font-family: ui-monospace, monospace;
+            font-weight: 600;
+        }
+
+        .log-time {
+            font-family: ui-monospace, monospace;
+            font-size: 11px;
+            color: var(--text-faint);
+            white-space: nowrap;
+            text-align: right;
+        }
+
+        .log-time .rel { display: block; font-size: 10px; color: var(--text-faint); opacity: 0.7; }
+
+        .empty, .loader {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-faint);
+            font-size: 13px;
+        }
+
+        .loader .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .sentinel { height: 1px; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+        @media (max-width: 600px) {
+            .log-row { grid-template-columns: 1fr; gap: 6px; }
+            .log-id { text-align: left; }
+            .log-time { text-align: left; }
+            .log-time .rel { display: inline; margin-left: 6px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="topbar-inner">
+        <div class="title-row">
+            <h1><span class="icon">📜</span>Auction Logs</h1>
+            <div class="token-badge" id="tokenBadge">—</div>
+        </div>
+
+        <div class="filters">
+            <div class="field">
+                <label for="fType">Тип</label>
+                <select id="fType"><option value="">— все —</option></select>
+            </div>
+            <div class="field">
+                <label for="fActor">Actor (ник или UUID)</label>
+                <input type="text" id="fActor" class="mono" placeholder="ник или uuid">
+            </div>
+            <div class="field">
+                <label for="fSubject">Subject (ник или UUID)</label>
+                <input type="text" id="fSubject" class="mono" placeholder="ник или uuid">
+            </div>
+            <div class="field">
+                <label for="fAfterId">After ID</label>
+                <input type="number" id="fAfterId" placeholder="—">
+            </div>
+            <div class="field">
+                <label for="fBeforeId">Before ID</label>
+                <input type="number" id="fBeforeId" placeholder="—">
+            </div>
+            <div class="field">
+                <label for="fAfterTs">After Time</label>
+                <input type="datetime-local" id="fAfterTs">
+            </div>
+            <div class="field">
+                <label for="fBeforeTs">Before Time</label>
+                <input type="datetime-local" id="fBeforeTs">
+            </div>
+        </div>
+
+        <div class="actions">
+            <button id="searchBtn">🔍 Найти</button>
+            <button id="resetBtn" class="ghost">Сброс</button>
+            <button id="refreshBtn" class="ghost">⟳ Обновить</button>
+            <span class="status" id="status"></span>
+        </div>
+    </div>
+</div>
+
+<div class="logs" id="logs"></div>
+<div class="sentinel" id="sentinel"></div>
+
+<script>
+    (function () {
+        'use strict';
+
+        // ---------- Токен из URL: /<token>/... ----------
+        function getTokenFromPath() {
+            const parts = window.location.pathname.split('/').filter(Boolean);
+            return parts[0] || null;
+        }
+
+        const token = getTokenFromPath();
+        const apiBase = token ? `/api/${token}` : null;
+
+        document.getElementById('tokenBadge').textContent = token || 'токен не найден';
+
+        if (!token) {
+            document.body.innerHTML = '<div class="empty" style="padding-top:120px">❌ Токен не найден в URL</div>';
+            return;
+        }
+
+            // ---------- Утилиты ----------
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    function isUuid(s) { return UUID_RE.test(s); }
+
+    function esc(s) {
+        return String(s).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
+
+    function cssEscape(s) {
+        if (window.CSS && CSS.escape) return CSS.escape(s);
+        return String(s).replace(/["\\]/g, '\\$&');
+    }
+
+    // Кэш UUID -> ник (null = "NoName"/не найден)
+    const nameCache = new Map();
+
+        // ---------- Батч-резолв ников ----------
+    // Очередь UUID, которые нужно резолвить. Обрабатывается последовательно
+    // пачками до 10 штук. Пока пачка в полёте — новые UUID копятся в очереди.
+    const NAME_BATCH_SIZE = 10;
+    const nameQueue = [];
+    const nameQueued = new Set();   // что уже стоит в очереди (не дублируем)
+    let nameBatchRunning = false;
+
+    function enqueueNames(uuids) {
+        for (const u of uuids) {
+            if (!u) continue;
+            if (nameCache.has(u)) continue;
+            if (nameQueued.has(u)) continue;
+            nameQueued.add(u);
+            nameQueue.push(u);
+        }
+        pumpNameQueue();
+    }
+
+    async function pumpNameQueue() {
+        if (nameBatchRunning) return;
+        if (nameQueue.length === 0) return;
+
+        nameBatchRunning = true;
+        try {
+            while (nameQueue.length > 0) {
+                const batch = nameQueue.splice(0, NAME_BATCH_SIZE);
+                for (const u of batch) nameQueued.delete(u);
+
+                const qs = batch.map(u => 'uuid=' + encodeURIComponent(u)).join('&');
+                const url = `${apiBase}/find_nickname?${qs}`;
+
+                let list = [];
+                try {
+                    const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                    if (r.ok) {
+                        const j = await r.json();
+                        if (Array.isArray(j)) list = j;
+                    }
+                } catch { /* ignore — ниже проставим NoName */ }
+
+                // Собираем ответы по uuid
+                const got = new Map();
+                for (const entry of list) {
+                    if (entry && entry.uuid) {
+                        got.set(entry.uuid, entry.ok === false ? null : (entry.name || null));
+                    }
+                }
+
+                // Проставляем кэш: есть ник -> ник, нет -> null (NoName)
+                for (const u of batch) {
+                    const n = got.has(u) ? got.get(u) : null;
+                    nameCache.set(u, n);
+                }
+
+                // Обновляем все DOM-элементы, ожидающие эти uuid
+                for (const u of batch) {
+                    const name = nameCache.get(u);
+                    const els = document.querySelectorAll(`[data-uuid="${cssEscape(u)}"]`);
+                    for (const el of els) {
+                        el.textContent = name || 'NoName';
+                    }
+                }
+            }
+        } finally {
+            nameBatchRunning = false;
+            // на случай, если за время работы что-то долетело
+            if (nameQueue.length > 0) pumpNameQueue();
+        }
+    }
+    // ---------- Рендер игрока ----------
+    // Возвращает HTML для UUID. Если ник уже в кэше — сразу ник,
+    // иначе — укороченный uuid + enqueue на батч-резолв.
+    function playerHtml(uuid) {
+        if (!uuid) return '<span class="sep">·</span>';
+        const safe = esc(uuid);
+
+        if (nameCache.has(uuid)) {
+            const n = nameCache.get(uuid);
+            return `<span class="player" title="${safe}">${esc(n || 'NoName')}</span>`;
+        }
+
+        enqueueNames([uuid]);
+        return `<span class="player" data-uuid="${safe}" title="${safe}">${safe.slice(0, 8)}…</span>`;
+    }
+
+        // ---------- Формат времени ----------
+        function fmtTime(ts) {
+            const d = new Date(ts);
+            const now = Date.now();
+            const diff = Math.floor((now - ts) / 1000);
+            let rel;
+            if (diff < 60) rel = diff + ' сек назад';
+            else if (diff < 3600) rel = Math.floor(diff / 60) + ' мин назад';
+            else if (diff < 86400) rel = Math.floor(diff / 3600) + ' ч назад';
+            else if (diff < 2592000) rel = Math.floor(diff / 86400) + ' дн назад';
+            else rel = d.toLocaleDateString('ru-RU');
+
+            const pad = n => String(n).padStart(2, '0');
+            const full = `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+            return `<span title="${full}">${full}<span class="rel">${rel}</span></span>`;
+        }
+
+        // ---------- Деталь лога ----------
+        function renderDetail(log) {
+            const parts = [];
+
+            parts.push(`actor: ${playerHtml(log.actor)}`);
+
+            if (log.subject) {
+                parts.push(`subject: ${playerHtml(log.subject)}`);
+            }
+
+            if (log.item !== undefined && log.item !== null) {
+                parts.push(`item: <span class="item">#${log.item}</span>`);
+            }
+            if (log.count !== undefined && log.count !== null) {
+                parts.push(`×<span class="count">${log.count}</span>`);
+            }
+            if (log.cents !== undefined && log.cents !== null) {
+                const price = (log.cents / 100).toLocaleString('en-US', {
+                    minimumFractionDigits: 0, maximumFractionDigits: 0
+                });
+                parts.push(`<span class="price">${price}</span>`);
+            }
+
+            return parts.join('<span class="sep">·</span>');
+        }
+
+        // ---------- Состояние ----------
+        const state = {
+            loading: false,
+            exhausted: false,
+            logs: [],
+            // для пагинации используется beforeId (идём "вниз" по id)
+            lastId: null,
+            filters: {}
+        };
+
+        const logsEl = document.getElementById('logs');
+        const sentinel = document.getElementById('sentinel');
+        const statusEl = document.getElementById('status');
+
+        // ---------- Формирование запроса ----------
+        function buildQuery(extra) {
+            const p = new URLSearchParams();
+
+            const type = document.getElementById('fType').value;
+            if (type) p.set('type', type);
+
+            const actor = document.getElementById('fActor').value.trim();
+            if (actor) p.set('actor', actor);
+
+            const subject = document.getElementById('fSubject').value.trim();
+            if (subject) p.set('subject', subject);
+
+            const afterId = document.getElementById('fAfterId').value;
+            if (afterId) p.set('afterId', afterId);
+
+            const beforeId = document.getElementById('fBeforeId').value;
+            if (beforeId) p.set('beforeId', beforeId);
+
+            const afterTs = document.getElementById('fAfterTs').value;
+            if (afterTs) p.set('afterTimestamp', new Date(afterTs).getTime());
+
+            const beforeTs = document.getElementById('fBeforeTs').value;
+            if (beforeTs) p.set('beforeTimestamp', new Date(beforeTs).getTime());
+
+            if (extra) {
+                for (const [k, v] of Object.entries(extra)) {
+                    if (v !== null && v !== undefined && v !== '') p.set(k, v);
+                }
+            }
+            return p.toString();
+        }
+
+        async function fetchLogs(extra) {
+            const qs = buildQuery(extra);
+            const url = `${apiBase}/find_logs${qs ? '?' + qs : ''}`;
+            const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const j = await r.json();
+            return Array.isArray(j) ? j : [];
+        }
+
+        // ---------- Рендер ----------
+        function appendLogs(list) {
+            if (!list.length) return;
+            const frag = document.createDocumentFragment();
+
+            for (const log of list) {
+                const row = document.createElement('div');
+                row.className = 'log-row';
+                row.innerHTML =
+                    `<div class="log-id">#${log.uid}</div>` +
+                    `<div class="log-main">` +
+                        `<div class="log-top">` +
+                            `<span class="log-type">${esc(log.type)}</span>` +
+                        `</div>` +
+                        `<div class="log-detail">${renderDetail(log)}</div>` +
+                    `</div>` +
+                    `<div class="log-time">${fmtTime(log.timestamp)}</div>`;
+                frag.appendChild(row);
+            }
+            logsEl.appendChild(frag);
+        }
+
+        // ---------- Загрузка страницы логов ----------
+        // Бэкенд отдаёт до 100 записей, сортировка — как в loadLogs (обычно по убыванию id).
+        // Для «догрузки вниз» используем beforeId = lastId.
+        async function loadMore() {
+            if (state.loading || state.exhausted) return;
+            state.loading = true;
+
+            const extra = {};
+            if (state.lastId !== null) extra.beforeId = state.lastId;
+
+            const loader = document.createElement('div');
+            loader.className = 'loader';
+            loader.innerHTML = '<span class="spinner"></span>Загрузка...';
+            logsEl.appendChild(loader);
+            statusEl.textContent = 'загрузка...';
+
+            try {
+                const list = await fetchLogs(extra);
+
+                loader.remove();
+
+                if (state.lastId === null) {
+                    logsEl.innerHTML = '';
+                    if (!list.length) {
+                        logsEl.innerHTML = '<div class="empty">Ничего не найдено</div>';
+                        state.exhausted = true;
+                        statusEl.textContent = 'пусто';
+                        return;
+                    }
+                }
+
+                appendLogs(list);
+                state.logs.push(...list);
+
+                if (list.length > 0) {
+                    state.lastId = list[list.length - 1].uid;
+                }
+
+                if (list.length < 100) {
+                    state.exhausted = true;
+                    statusEl.textContent = `загружено ${state.logs.length} (конец)`;
+                } else {
+                    statusEl.textContent = `загружено ${state.logs.length}`;
+                }
+            } catch (e) {
+                loader.remove();
+                const err = document.createElement('div');
+                err.className = 'empty';
+                err.style.color = 'var(--red)';
+                err.textContent = '❌ Ошибка загрузки: ' + e.message;
+                logsEl.appendChild(err);
+                statusEl.textContent = 'ошибка';
+                state.exhausted = true;
+            } finally {
+                state.loading = false;
+            }
+        }
+
+        // ---------- Поиск заново ----------
+        function reset() {
+            state.loading = false;
+            state.exhausted = false;
+            state.logs = [];
+            state.lastId = null;
+            logsEl.innerHTML = '';
+            statusEl.textContent = '';
+            loadMore();
+        }
+
+        // ---------- IntersectionObserver для автоподгрузки ----------
+        const io = new IntersectionObserver((entries) => {
+            for (const e of entries) {
+                if (e.isIntersecting) loadMore();
+            }
+        }, { rootMargin: '400px 0px' });
+        io.observe(sentinel);
+
+        // ---------- Загрузка типов ----------
+        async function loadTypes() {
+            try {
+                const r = await fetch(`${apiBase}/logs_types`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!r.ok) return;
+                const types = await r.json();
+                const sel = document.getElementById('fType');
+                for (const t of types) {
+                    const o = document.createElement('option');
+                    o.value = t;
+                    o.textContent = t;
+                    sel.appendChild(o);
+                }
+            } catch { /* ignore */ }
+        }
+
+        // ---------- События ----------
+        document.getElementById('searchBtn').addEventListener('click', reset);
+        document.getElementById('refreshBtn').addEventListener('click', reset);
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            ['fType', 'fActor', 'fSubject', 'fAfterId', 'fBeforeId', 'fAfterTs', 'fBeforeTs']
+                .forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el.tagName === 'SELECT') el.value = '';
+                    else el.value = '';
+                });
+            reset();
+        });
+
+        // Enter в текстовых полях -> поиск
+        ['fActor', 'fSubject', 'fAfterId', 'fBeforeId', 'fAfterTs', 'fBeforeTs']
+            .forEach(id => {
+                document.getElementById(id).addEventListener('keydown', e => {
+                    if (e.key === 'Enter') reset();
+                });
+            });
+
+        // ---------- Старт ----------
+        loadTypes().then(() => loadMore());
+    })();
+</script>
+</body>
+</html>

@@ -20,7 +20,14 @@ public class Main {
 
         ClientList clientList = new ClientList();
 
+        int port;
+        if (args.length >= 1) {
+            port = Integer.parseInt(args[0]);
+        } else {
+            port = 4443;
+        }
+
         ConnectionListener connectionListener = new ConnectionListener(clientList, null, database);
-        connectionListener.startServerListener(4443);// //"ws://localhost:4443/api/ws"
+        connectionListener.startServerListener(port);// //"ws://localhost:4443/api/ws"
     }
 }

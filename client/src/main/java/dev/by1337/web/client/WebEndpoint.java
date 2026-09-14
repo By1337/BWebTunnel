@@ -11,6 +11,7 @@ import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
@@ -39,6 +40,8 @@ public class WebEndpoint {
     private final byte @Nullable [] descriptionBytes;
     private final int helloPayloadSize;
     private final boolean autoConnect;
+
+    private volatile boolean closed;
 
     public WebEndpoint(RequestRouter router, String url, String staticContent, @Nullable String secret, @Nullable String description) {
         this(router, false, url, staticContent, description, secret);
@@ -95,7 +98,7 @@ public class WebEndpoint {
                 log.warn("Connection closed cuz {}", msg);
             }
             conn.close();
-            if (autoConnect) {
+            if (autoConnect && !closed) {
                 connect();
             }
         }
@@ -103,6 +106,7 @@ public class WebEndpoint {
 
     public void close() {
         synchronized (WebEndpoint.this) {
+            closed = true;
             if (webSocket != null) webSocket.close();
             webSocket = null;
             httpClient.close();
@@ -155,9 +159,49 @@ public class WebEndpoint {
             }
         }
 
+        private byte[] fragmentBuffer = new byte[2048];
+        private int position;
+
         @Override
         public CompletionStage<?> onBinary(WebSocket webSocket, ByteBuffer buf, boolean last) {
-            if (!last) throw new IllegalStateException("not allowed method BINARY fragmented");
+            if (!last || position != 0) {
+                writeToBuffer(buf);
+                if (last) {
+                    try {
+                        onBinary(webSocket, ByteBuffer.wrap(fragmentBuffer, 0, position));
+                    } finally {
+                        position = 0;
+                    }
+                }
+            } else {
+                onBinary(webSocket, buf);
+            }
+
+            webSocket.request(1);
+            return null;
+        }
+
+        private void writeToBuffer(ByteBuffer buf) {
+            int size = buf.remaining();
+            ensureBuffer(size);
+
+            buf.get(fragmentBuffer, position, size);
+            position += size;
+        }
+
+        private void ensureBuffer(int size) {
+            if (fragmentBuffer.length - position >= size) {
+                return;
+            }
+
+            int required = position + size;
+            if (required > WebProtocol.MAX_PAYLOAD_SIZE<<1){
+                throw new IllegalStateException("payload is too large! required " + required + " bytes");
+            }
+            fragmentBuffer = Arrays.copyOf(fragmentBuffer, Math.max(fragmentBuffer.length << 1, required));
+        }
+
+        public void onBinary(WebSocket webSocket, ByteBuffer buf) {
             if (buf.remaining() < 1) throw new IllegalStateException("Bad payload size!");
             byte type = buf.get();
             if (type == WebProtocol.S2C_AUTH_STATUS) {
@@ -178,22 +222,25 @@ public class WebEndpoint {
                 if (debug) {
                     log.info("handle {}", uri);
                 }
-                @Nullable String response = router.handle(uri);
-                byte @Nullable [] result = response == null ? null : response.getBytes(StandardCharsets.UTF_8);
-                ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 4 + (result == null ? 0 : result.length));
-                buffer.put(WebProtocol.C2S_RESPONSE);
-                buffer.putInt(uid);
-                if (result == null) {
-                    buffer.putInt(-1);
-                } else if (result.length < 1024) {
-                    buffer.putInt(0);
-                    buffer.put(result);
-                } else {
-                    buffer.putInt(result.length);
-                    compressor.deflate(result, buffer);
-                }
-                buffer.flip();
-                webSocket.sendBinary(buffer, true);
+                router.handle(uri, writer -> {
+                    int payload = writer == null ? 0 : writer.position();
+                    ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 4 + payload);
+                    buffer.put(WebProtocol.C2S_RESPONSE);
+                    buffer.putInt(uid);
+                    if (payload == 0) {
+                        buffer.putInt(-1);
+                    } else if (payload < 1024) {
+                        buffer.putInt(0);
+                        buffer.put(writer.buffer(), 0, payload);
+                    } else {
+                        buffer.putInt(payload);
+                        synchronized (compressor) {
+                            compressor.deflate(writer.buffer(), 0, payload, buffer);
+                        }
+                    }
+                    buffer.flip();
+                    webSocket.sendBinary(buffer, true);
+                });
             } else if (type == WebProtocol.S2C_KEEPALIVE_PING) {
                 //System.out.println("IN KEEPALIVE_PING");
                 ByteBuffer buffer = ByteBuffer.allocate(1);
@@ -211,8 +258,6 @@ public class WebEndpoint {
             } else {
                 throw new IllegalStateException("Unknown packet " + type);
             }
-            webSocket.request(1);
-            return null;
         }
 
         @Override

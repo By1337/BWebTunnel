@@ -5,12 +5,14 @@ import dev.by1337.web.network.service.ServiceGroup;
 import dev.by1337.web.util.Base62Converter;
 import org.jetbrains.annotations.Nullable;
 
+import java.security.SecureRandom;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class ClientList {
+    private static final SecureRandom RANDOM = new SecureRandom();
     private final Map<String, ServiceConnection> clientList = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ServiceGroup> groupMap = new ConcurrentHashMap<>();
 
@@ -51,7 +53,7 @@ public class ClientList {
     }
 
     public static String gen64Token() {
-        return Base62Converter.encode(ThreadLocalRandom.current().nextLong());
+        return Base62Converter.encode(RANDOM.nextLong());
     }
 
     public static String gen128Token() {

@@ -52,7 +52,7 @@ public final class StreamJsonWriter {
                 default -> writeChar(c, it);
             }
         }
-        buf.writeByte('"');
+        writeChar('"');
     }
 
     private void writeCodePoint(int c) {

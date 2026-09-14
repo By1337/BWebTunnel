@@ -30,13 +30,15 @@ public class ConnectionListener {
     private static final Logger log = LoggerFactory.getLogger(ConnectionListener.class);
     private final List<ChannelFuture> channels = Collections.synchronizedList(Lists.newArrayList());
     private final LazyLoad<EpollEventLoopGroup> epollEventLoopGroup = new LazyLoad<>(() ->
-            new EpollEventLoopGroup(0, new ThreadFactoryBuilder().setNameFormat("Netty Epoll Server IO #%d").setDaemon(true).build())
+            new EpollEventLoopGroup(0, new ThreadFactoryBuilder().setNameFormat("Netty Epoll Server IO #%d")
+                    .setDaemon(false).build())
     );
 
     private final LazyLoad<NioEventLoopGroup> nioEventLoopGroup = new LazyLoad<>(() ->
             new NioEventLoopGroup(0, new ThreadFactoryBuilder()
                     .setNameFormat("Netty Server IO #%d")
-                    .setUncaughtExceptionHandler((t, e) -> log.error("Caught previously unhandled exception :", e)).setDaemon(true).build())
+                    .setUncaughtExceptionHandler((t, e) -> log.error("Caught previously unhandled exception :", e))
+                    .setDaemon(false).build())
     );
     private final ClientList clientList;
     private final @Nullable GetStaticContentHandler contentHandler;

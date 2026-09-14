@@ -89,14 +89,33 @@
 </div>
 
 <script>
-    // Извлекаем токен из пути: /<token>/index.html
+
     function getTokenFromPath() {
         const parts = window.location.pathname.split('/').filter(Boolean);
-        // Первая часть пути — это токен
         return parts[0] || null;
     }
-
     const token = getTokenFromPath();
+
+    if (!token) {
+         window.location.replace('/404.html');
+    }
+    (async function load() {
+        try {
+            const response = await fetch(`/api/${token}/health`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json, */*'
+                }
+            });
+            if (!response.ok || !(await response.json()).ok) {
+                window.location.replace('/404.html');
+            }
+        } catch (err) {
+            window.location.replace('/404.html');
+        }
+    })();
+
+
     document.getElementById('tokenDisplay').textContent = token || 'не найден';
 
     const sendBtn = document.getElementById('sendBtn');

@@ -7,6 +7,7 @@ import dev.by1337.web.ClientList;
 import dev.by1337.web.db.Database;
 import dev.by1337.web.db.User;
 import dev.by1337.web.network.HttpResponser;
+import dev.by1337.web.util.RequestRateLimiter;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaderNames;
@@ -25,6 +26,7 @@ public class AuthHandler {
     private final Cache<String, String> sessions = Caffeine.newBuilder()
             .expireAfterAccess(Duration.ofDays(1))
             .build();
+    private final RequestRateLimiter limiter = new RequestRateLimiter(20, Duration.ofMinutes(1));
 
     public AuthHandler(ClientList clientList, Database database) {
         this.clientList = clientList;
@@ -42,9 +44,9 @@ public class AuthHandler {
         String path = cleanupPath(req.uri());
 
         switch (path) {
-            case "/session/login" -> handleLogin(req, resp);
+            case "/session/login" -> handleLogin(ctx,req, resp);
             case "/session/me" -> handleMe(req, resp);
-            case "/session/register" -> handleRegister(req, resp);
+            case "/session/register" -> handleRegister(ctx,req, resp);
             case "/session/logout" -> handleLogout(req, resp);
             default -> resp.send(HttpResponseStatus.NOT_FOUND);
         }
@@ -52,8 +54,13 @@ public class AuthHandler {
 
     public static String cleanupPath(String in) {
         if (in.isBlank()) return "/";
-        if (!in.startsWith("/")) in = '/' + in;
-        if (in.endsWith("/")) return in.substring(0, in.length() - 1);
+
+        if (!in.startsWith("/"))
+            in = '/' + in;
+
+        if (in.length() > 1 && in.endsWith("/"))
+            in = in.substring(0, in.length() - 1);
+
         return in;
     }
 
@@ -79,20 +86,27 @@ public class AuthHandler {
         if (session != null) {
             sessions.invalidate(session);
         }
+        resp.send(HttpResponseStatus.OK);
     }
 
-    private void handleLogin(FullHttpRequest req, HttpResponser resp) {
+    private void handleLogin(ChannelHandlerContext ctx, FullHttpRequest req, HttpResponser resp) {
         if (req.method() != HttpMethod.POST) {
             resp.send(HttpResponseStatus.METHOD_NOT_ALLOWED);
             return;
         }
+        if (limiter.isRateLimited(ctx, req)){
+            resp.send(HttpResponseStatus.TOO_MANY_REQUESTS);
+            return;
+        }
         LoginData f = parse(req);
         if (f == null) {
+            limiter.record(ctx, req);
             resp.sendJsonStatus(HttpResponseStatus.UNAUTHORIZED, "{\"ok\":false,\"message\": \"Неверный логин или пароль\"}");
             return;
         }
         var user = database.getUserByLogin(f.login);
         if (user == null || !user.testPassword(f.password)) {
+            limiter.record(ctx, req);
             resp.sendJsonStatus(HttpResponseStatus.UNAUTHORIZED, "{\"ok\":false,\"message\": \"Неверный логин или пароль\"}");
             return;
         }
@@ -109,11 +123,16 @@ public class AuthHandler {
         );
     }
 
-    private void handleRegister(FullHttpRequest req, HttpResponser resp) {
+    private void handleRegister(ChannelHandlerContext ctx, FullHttpRequest req, HttpResponser resp) {
         if (req.method() != HttpMethod.POST) {
             resp.send(HttpResponseStatus.METHOD_NOT_ALLOWED);
             return;
         }
+        if (limiter.isRateLimited(ctx, req)){
+            resp.send(HttpResponseStatus.TOO_MANY_REQUESTS);
+            return;
+        }
+        limiter.record(ctx, req);
         LoginData f = parse(req);
         if (f == null) {
             resp.sendJsonStatus(HttpResponseStatus.UNAUTHORIZED, "{\"ok\":false,\"message\": \"пупупу\"}");
@@ -141,22 +160,27 @@ public class AuthHandler {
         var buf = req.content();
         int size = buf.readableBytes();
         if (size == 0 || size > 2048) return null;
+
         byte[] arr = new byte[size];
-        buf.readBytes(arr);
-        JsonReader reader = new JsonReader(new StringReader(new String(arr, StandardCharsets.UTF_8)));
-        try {
+        buf.getBytes(buf.readerIndex(), arr);
+
+        try (JsonReader reader = new JsonReader(
+                new StringReader(new String(arr, StandardCharsets.UTF_8)))) {
+
             reader.beginObject();
+
             String login = null;
             String password = null;
 
-            if (!reader.hasNext()) return null;
-            if ("login".equals(reader.nextName()))
-                login = reader.nextString();
-            else password = reader.nextString();
-            if (!reader.hasNext()) return null;
-            if ("password".equals(reader.nextName()))
-                password = reader.nextString();
-            else login = reader.nextString();
+            while (reader.hasNext()) {
+                switch (reader.nextName()) {
+                    case "login" -> login = reader.nextString();
+                    case "password" -> password = reader.nextString();
+                    default -> reader.skipValue();
+                }
+            }
+
+            reader.endObject();
 
             if (login == null || password == null) return null;
             return new LoginData(login, password);
@@ -169,35 +193,6 @@ public class AuthHandler {
 
     }
 
-    /*private void handleRegister(FullHttpRequest req, HttpResponser resp) {
-        Map<String, String> f = parseForm(req);
-        String user = f.getOrDefault("username", "").trim();
-        String pass = f.getOrDefault("password", "");
-
-        if (user.length() < 3 || pass.length() < 8) {
-            resp.sendJsonStatus(HttpResponseStatus.BAD_REQUEST, "{\"error\":\"Логин ≥3, пароль ≥8\"}");
-            return;
-        }
-        if (auth.exists(user)) {
-            resp.sendJsonStatus(HttpResponseStatus.CONFLICT, "{\"error\":\"Уже занят\"}");
-            return;
-        }
-        User u = auth.register(user, pass);
-        resp.sendJsonWithCookie("{\"ok\":true}", "session", sessions.create(u.id()), cookieOpts(req));
-    }
-
-    private void handleLogout(FullHttpRequest req, HttpResponser resp) {
-        String sid = cookieValue(req, "session");
-        if (sid != null) sessions.destroy(sid);
-        resp.sendJsonWithCookie("{\"ok\":true}", "session", "", cookieOpts(req).maxAge(0));
-    }*/
-
-
-    private CookieBuilder cookieOpts(FullHttpRequest req) {
-        boolean https = "https".equalsIgnoreCase(req.headers().get("X-Forwarded-Proto"));
-        return CookieBuilder.session(https);
-    }
-
     public static String cookieValue(FullHttpRequest req, String name) {
         String header = req.headers().get(HttpHeaderNames.COOKIE);
         if (header == null) return null;
@@ -207,33 +202,3 @@ public class AuthHandler {
         return null;
     }
 }
-// async function post(path, data) {
-//  const res = await fetch(path, {
-//    method: 'POST',
-//    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-//    body: new URLSearchParams(data),
-//    credentials: 'same-origin',   // ← обязательно, иначе Set-Cookie не примется
-//  });
-//  const json = await res.json();
-//  return { ok: res.ok, status: res.status, json };
-//}
-//
-/// / логин
-//async function login(username, password) {
-//  const { ok, json } = await post('/auth/login', { username, password });
-//  if (ok) location.href = '/';
-//  else showError(json.error);
-//}
-//
-/// / регистрация
-//async function register(username, password) {
-//  const { ok, json } = await post('/auth/register', { username, password });
-//  if (ok) location.href = '/';
-//  else showError(json.error);
-//}
-//
-/// / логаут
-//async function logout() {
-//  await post('/auth/logout', {});
-//  location.href = '/login.html';
-//}

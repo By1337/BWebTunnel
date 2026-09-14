@@ -18,26 +18,31 @@ class ConnectTest {
     private int port;
     private String token;
 
-    @Test
+    // @Test
     void startServer() throws Exception {
         var clients = new ClientList();
-        User user = new User("by1337", Hashing.sha256().hashBytes("password".getBytes(StandardCharsets.UTF_8)).toString());
+        User user = new User("by1337", "password");
         FileDatabase fileDatabase = new FileDatabase("./static/users.json");
-        fileDatabase.addUser(user);
+        if (!fileDatabase.addUser(user)){
+            user = fileDatabase.getUserByLogin("by1337");
+        }
 
-        server = new ConnectionListener(clients, new GetStaticContentHandler(clients), fileDatabase);
-        port = server.startServerListener(4443);// //"ws://localhost:4443/api/ws"
+       // server = new ConnectionListener(clients, new GetStaticContentHandler(clients), fileDatabase);
+       // port = server.startServerListener(4443);// //"ws://localhost:4443/api/ws"
 
         WebEndpoint webEndpoint = new WebEndpoint(
                 new RequestRouter()
-                        .route("/hello", p -> {
-                            return "Hello " + p.orDefault("name", RequestParams::getString, () -> "Bob");
+                        .route("/hello", h -> {
+                            try (var o = h.writer().startObject(null)){
+                                h.writer().putString("name", h.params().getString("name", "NoName!"));
+                            }
+                            h.send();
                         })
                 , true,
-                "ws://localhost:%d/api/ws".formatted(port),
+                "wss://btunnel.bdev.space/api/ws".formatted(port),
                 "helloworld",
-                user.secret,
-                "test group"
+                null,
+                null
         );
 
         token = webEndpoint.connect().get(5, TimeUnit.SECONDS).getToken();

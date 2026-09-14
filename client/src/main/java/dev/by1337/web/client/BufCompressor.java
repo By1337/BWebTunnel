@@ -20,8 +20,8 @@ final class BufCompressor {
         
         this.deflater.reset();
     }
-    public void deflate(byte[] source, ByteBuffer destination) {
-        this.deflater.setInput(source);
+    public void deflate(byte[] input, int off, int len, ByteBuffer destination) {
+        this.deflater.setInput(input, off, len);
         this.deflater.finish();
 
         while(!this.deflater.finished()) {

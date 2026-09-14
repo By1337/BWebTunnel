@@ -1,6 +1,8 @@
 package dev.by1337.web.client;
 
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -8,6 +10,7 @@ import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 public final class RequestParams {
+    private static final Logger log = LoggerFactory.getLogger(RequestParams.class);
     private final String path;
     private final Map<String, List<String>> params;
 
@@ -38,6 +41,27 @@ public final class RequestParams {
         return orDefault(key, RequestParams::getString, () -> def);
     }
 
+    public Long getLong(String key, Long def) {
+        var s = getString(key, null);
+        if (s == null) return def;
+        try {
+            return Long.parseLong(s);
+        } catch (NumberFormatException e) {
+            log.error("Bad number {} {}", key, s, e);
+        }
+        return def;
+    }
+    public Integer getInt(String key, Integer def) {
+        var s = getString(key, null);
+        if (s == null) return def;
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException e) {
+            log.error("Bad number {} {}", key, s, e);
+        }
+        return def;
+    }
+
     public @Nullable String getString(String key) {
         var v = params.get(key);
         if (v == null || v.isEmpty()) return null;
@@ -46,8 +70,13 @@ public final class RequestParams {
 
     public static String cleanupPath(String in) {
         if (in.isBlank()) return "/";
-        if (!in.startsWith("/")) in = '/' + in;
-        if (in.endsWith("/")) return in.substring(0, in.length() - 1);
+
+        if (!in.startsWith("/"))
+            in = '/' + in;
+
+        if (in.length() > 1 && in.endsWith("/"))
+            in = in.substring(0, in.length() - 1);
+
         return in;
     }
 

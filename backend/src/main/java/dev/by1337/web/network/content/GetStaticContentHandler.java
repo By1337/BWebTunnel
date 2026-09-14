@@ -66,7 +66,7 @@ public class GetStaticContentHandler {
     }
 
     private void sendFile(HttpResponser responser, Path path) {
-        System.out.println("get " + path);
+        //System.out.println("get " + path);
         if (Files.isRegularFile(path)) {
             try {
                 responser.send(Unpooled.wrappedBuffer(Files.readAllBytes(path)), HttpResponser.contentType(path.getFileName().toString()));

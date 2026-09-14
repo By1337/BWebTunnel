@@ -149,8 +149,9 @@ public class ServiceConnection extends SimpleChannelInboundHandler<WebSocketFram
                     request.callback.send(HttpResponseStatus.NOT_FOUND);
                     return;
                 }
-                if (compressType < 0 || compressType > WebProtocol.MAX_PAYLOAD_SIZE) {
-                    disconnect(ctx, "Bad response size " + compressType);
+                int size = compressType < 0 ? -1 : compressType == 0 ? content.readableBytes() : compressType;
+                if (size < 0 || size > WebProtocol.MAX_PAYLOAD_SIZE) {
+                    disconnect(ctx, "Bad response size " + compressType + " readableBytes " + content.readableBytes());
                     return;
                 }
                 if (compressType == 0) {

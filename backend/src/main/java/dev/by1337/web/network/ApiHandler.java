@@ -8,6 +8,7 @@ import dev.by1337.web.network.auth.AuthHandler;
 import dev.by1337.web.network.content.GetStaticContentHandler;
 import dev.by1337.web.network.service.ServiceConnection;
 import dev.by1337.web.network.service.ServiceGroup;
+import dev.by1337.web.util.RequestRateLimiter;
 import dev.by1337.web.util.StreamJsonWriter;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -20,9 +21,13 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
+
 final class ApiHandler extends SimpleChannelInboundHandler<Object> {
 
     private static final Logger log = LoggerFactory.getLogger(ApiHandler.class);
+    private static final RequestRateLimiter RATE_LIMITER = new RequestRateLimiter(20, Duration.ofMinutes(1));
+
     private final ClientList clientList;
     private final @Nullable GetStaticContentHandler contentHandler;
     private final Database database;
@@ -83,7 +88,8 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
                             var buf = channel.alloc().buffer();
                             buf.writeByte(WebProtocol.C2S_ERROR_MSG);
                             buf.writeByte(0);
-                            ServerWebProtocol.writeUtf8(buf, WebProtocol.MAX_STRING_SIZE, "Invalid secret");
+                            //by1337:e1xDrafSMEO6YNlPYsP3fr
+                            ServerWebProtocol.writeUtf8(buf, WebProtocol.MAX_STRING_SIZE, "Invalid secret '" + secret + "'");
                             service.write(new BinaryWebSocketFrame(buf));
                         }
                     }
@@ -107,6 +113,10 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
             responser.send(HttpResponseStatus.METHOD_NOT_ALLOWED);
             return;
         }
+        if (RATE_LIMITER.isRateLimited(ctx, request)){
+            responser.send(HttpResponseStatus.TOO_MANY_REQUESTS);
+            return;
+        }
 
         // /api/token/method
         // /api/token/method/
@@ -122,6 +132,7 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
         if (args[2].equals("dashboard")) {
             var secret = auth.getSecret(request);
             if (secret == null) {
+                RATE_LIMITER.record(ctx, request);
                 responser.send(HttpResponseStatus.UNAUTHORIZED);
                 return;
             }
@@ -143,12 +154,14 @@ final class ApiHandler extends SimpleChannelInboundHandler<Object> {
         String method = args[3];
         var client = clientList.getClient(token);
         if (client == null) {
-            //todo rate limit
+            RATE_LIMITER.record(ctx, request);
             if (method.equals("health")) {
                 responser.sendJson("{\"ok\": \"false\"}");
             } else {
-                responser.send(HttpResponseStatus.NOT_FOUND);
+                responser.redirect("/404.html", HttpResponseStatus.NOT_FOUND);
             }
+        } else if (method.equals("health")) {
+            responser.sendJson("{\"ok\": \"true\"}");
         } else {
             client.request(responser, method);
         }
