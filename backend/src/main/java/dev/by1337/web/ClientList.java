@@ -9,19 +9,18 @@ import java.security.SecureRandom;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadLocalRandom;
 
 public class ClientList {
     private static final SecureRandom RANDOM = new SecureRandom();
     private final Map<String, ServiceConnection> clientList = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ServiceGroup> groupMap = new ConcurrentHashMap<>();
 
-    public ServiceConnection newConnection(ServiceConnection client, boolean use128Token) {
+    public synchronized ServiceConnection newConnection(ServiceConnection client, boolean use128Token) {
         for (; ; ) {
             String token = use128Token ? gen128Token() : gen64Token();
 
+            client.setToken(token);
             if (clientList.putIfAbsent(token, client) == null) {
-                client.setToken(token);
                 var groupSecret = client.groupSecret();
                 if (groupSecret != null) {
                     groupMap.merge(groupSecret, new ServiceGroup(groupSecret, List.of(client)), ServiceGroup::merge);
@@ -31,16 +30,12 @@ public class ClientList {
         }
     }
 
-    public void removeConnection(ServiceConnection client) {
-        clientList.remove(client.token(), client);
+    public synchronized void removeConnection(ServiceConnection client) {
+        String token = client.token();
+        if (token == null || !clientList.remove(token, client)) return;
         var secret = client.groupSecret();
         if (secret != null) {
-            var group = groupMap.get(secret);
-            if (group != null) {
-                var newGroup = group.remove(client);
-                if (newGroup == null) groupMap.remove(secret, group);
-                else groupMap.put(secret, newGroup);
-            }
+            groupMap.computeIfPresent(secret, (key, group) -> group.remove(client));
         }
     }
 

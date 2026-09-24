@@ -1,11 +1,8 @@
 package dev.by1337.web.network.service;
 
 import dev.by1337.web.util.StreamJsonWriter;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import org.jetbrains.annotations.Nullable;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -15,12 +12,7 @@ public class ServiceGroup {
 
     public ServiceGroup(String secret, List<ServiceConnection> services) {
         this.secret = secret;
-        this.services = services;
-        ByteBuf buf = Unpooled.buffer();
-        toJson(new StreamJsonWriter(buf));
-        byte[] arr = new byte[buf.readableBytes()];
-        buf.readBytes(arr);
-        System.out.println(new String(arr, StandardCharsets.UTF_8));
+        this.services = List.copyOf(services);
     }
 
     public static ServiceGroup merge(ServiceGroup v, ServiceGroup v1){
@@ -31,9 +23,9 @@ public class ServiceGroup {
 
     public @Nullable ServiceGroup remove(ServiceConnection connection){
         List<ServiceConnection> newList = new ArrayList<>(services);
-        newList.remove(connection);
+        if (!newList.remove(connection)) return this;
         if (newList.isEmpty()) return null;
-        return new ServiceGroup(secret, services);
+        return new ServiceGroup(secret, newList);
     }
 
 
@@ -65,5 +57,8 @@ public class ServiceGroup {
             writer.appendField("description", description);
         }
         writer.endObject();
+    }
+    public int size(){
+         return services.size();
     }
 }

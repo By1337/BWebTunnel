@@ -6,6 +6,13 @@
   <version>1.0</version>
   <packaging>pom</packaging>
   <name>BWebTunnel</name>
+  <distributionManagement>
+    <repository>
+      <id>by1337.repo.2</id>
+      <name>releases</name>
+      <url>https://repo.by1337.space/repository/maven-releases/</url>
+    </repository>
+  </distributionManagement>
   <modules>
     <module>backend</module>
     <module>client</module>
